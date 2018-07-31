@@ -30,24 +30,41 @@ from tools.paths import TOOLS_BOOTLOADERS
 from tools.utils import json_file_to_dict
 
 __all__ = ["target", "TARGETS", "TARGET_MAP", "TARGET_NAMES", "CORE_LABELS",
-           "HookError", "generate_py_target", "Target",
+           "CORE_ARCH", "HookError", "generate_py_target", "Target",
            "CUMULATIVE_ATTRIBUTES", "get_resolution_order"]
 
 CORE_LABELS = {
-   "Cortex-M0" : ["M0", "CORTEX_M", "LIKE_CORTEX_M0", "CORTEX"],
-   "Cortex-M0+": ["M0P", "CORTEX_M", "LIKE_CORTEX_M0", "CORTEX"],
-   "Cortex-M1" : ["M1", "CORTEX_M", "LIKE_CORTEX_M1", "CORTEX"],
-   "Cortex-M3" : ["M3", "CORTEX_M", "LIKE_CORTEX_M3", "CORTEX"],
-   "Cortex-M4" : ["M4", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M4", "CORTEX"],
-   "Cortex-M4F" : ["M4", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M4", "CORTEX"],
-   "Cortex-M7" : ["M7", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M7", "CORTEX"],
-   "Cortex-M7F" : ["M7", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M7", "CORTEX"],
-   "Cortex-M7FD" : ["M7", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M7", "CORTEX"],
-   "Cortex-A9" : ["A9", "CORTEX_A", "LIKE_CORTEX_A9", "CORTEX"],
+    "Cortex-M0": ["M0", "CORTEX_M", "LIKE_CORTEX_M0", "CORTEX"],
+    "Cortex-M0+": ["M0P", "CORTEX_M", "LIKE_CORTEX_M0", "CORTEX"],
+    "Cortex-M1": ["M1", "CORTEX_M", "LIKE_CORTEX_M1", "CORTEX"],
+    "Cortex-M3": ["M3", "CORTEX_M", "LIKE_CORTEX_M3", "CORTEX"],
+    "Cortex-M4": ["M4", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M4", "CORTEX"],
+    "Cortex-M4F": ["M4", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M4", "CORTEX"],
+    "Cortex-M7": ["M7", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M7", "CORTEX"],
+    "Cortex-M7F": ["M7", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M7", "CORTEX"],
+    "Cortex-M7FD": ["M7", "CORTEX_M", "RTOS_M4_M7", "LIKE_CORTEX_M7", "CORTEX"],
+    "Cortex-A9": ["A9", "CORTEX_A", "LIKE_CORTEX_A9", "CORTEX"],
     "Cortex-M23": ["M23", "CORTEX_M", "LIKE_CORTEX_M23", "CORTEX"],
-    "Cortex-M23-NS": ["M23", "CORTEX_M", "LIKE_CORTEX_M23", "CORTEX"],
+    "Cortex-M23-NS": ["M23", "M23_NS", "CORTEX_M", "LIKE_CORTEX_M23", "CORTEX"],
     "Cortex-M33": ["M33", "CORTEX_M", "LIKE_CORTEX_M33", "CORTEX"],
-    "Cortex-M33-NS": ["M33", "CORTEX_M", "LIKE_CORTEX_M33", "CORTEX"]
+    "Cortex-M33-NS": ["M33", "M33_NS", "CORTEX_M", "LIKE_CORTEX_M33", "CORTEX"]
+}
+
+CORE_ARCH = {
+    "Cortex-M0": 6,
+    "Cortex-M0+": 6,
+    "Cortex-M1": 6,
+    "Cortex-M3": 7,
+    "Cortex-M4": 7,
+    "Cortex-M4F": 7,
+    "Cortex-M7": 7,
+    "Cortex-M7F": 7,
+    "Cortex-M7FD": 7,
+    "Cortex-A9": 7,
+    "Cortex-M23": 8,
+    "Cortex-M23-NS": 8,
+    "Cortex-M33": 8,
+    "Cortex-M33-NS": 8,
 }
 
 ################################################################################

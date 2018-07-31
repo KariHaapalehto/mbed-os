@@ -16,8 +16,8 @@ if (MBED_APP_START == 0) {
   define symbol MBED_RAM_START = 0x20000000;
   define symbol MBED_RAM_SIZE  = 0x10000;
 } else {
-  define symbol MBED_RAM_START = 0x20003188;
-  define symbol MBED_RAM_SIZE  = 0x3CE78;
+  define symbol MBED_RAM_START = 0x200031D0;
+  define symbol MBED_RAM_SIZE  = 0xCE30;
 }
 
 define symbol MBED_RAM0_START = MBED_RAM_START;
@@ -59,7 +59,6 @@ place at address mem:__ICFEDIT_region_RAM_NVIC_start__ { section .nvictable };
 
 do not initialize  { section .noinit };
 place in RAM_region { section .noinit };
-
 
 keep { section .intvec };
 place at address mem:__ICFEDIT_intvec_start__ { readonly section .intvec };
