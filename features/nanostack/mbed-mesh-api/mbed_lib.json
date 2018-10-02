@@ -108,6 +108,50 @@
         "thread-security-policy": {
             "help": "Commissioning security policy bits [0-0xFF]",
             "value": 255
+        },
+        "ws-default-network-name": {
+            "help": "dafault network name",
+            "value": ""
+        },
+        "ws-regulator-domain": {
+            "help": "Regulator domain.",
+            "value": "255"
+        },
+        "ws-operating-class": {
+            "help": "Operating class.",
+            "value": "255"
+        },
+        "ws-operating-mode": {
+            "help": "Operating mode.",
+            "value": "255"
+        },
+        "ws-channel-function": {
+            "help": "Channel-function.",
+            "value": "255"
+        },
+        "ws-default-fixed-channel": {
+            "help": "Default fixed channel",
+            "value": 0
+        },
+        "ws-default-dwell-time": {
+            "help": "Default dwell time",
+            "value": 0
+        },
+        "ws-fhss-bc-interval": {
+            "help": "Broadcast interval. Duration between broadcast dwell intervals. Range: 0-16777216 milliseconds",
+            "value": 0
+        },
+        "ws-fhss-bc-dwell-interval": {
+            "help": "Broadcast dwell interval. Range: 15-250 milliseconds",
+            "value": 0
+        },
+        "ws-fhss-uc-dwell-interval": {
+            "help": "Unicast dwell interval. Range: 15-250 milliseconds",
+            "value": 0
+        },
+        "ws-device-type": {
+            "help": "Device mode (NET_6LOWPAN_ROUTER or NET_6LOWPAN_HOST). Router is routing packets from other device, creating a mesh network.",
+            "value": "NET_6LOWPAN_ROUTER"
         }
     },
     "target_overrides": {
