@@ -55,7 +55,7 @@ AT_CellularNetwork::~AT_CellularNetwork()
 #endif // NSAPI_PPP_AVAILABLE
 
     for (int type = 0; type < CellularNetwork::C_MAX; type++) {
-        if (has_registration((RegistrationType)type)) {
+        if (has_registration((RegistrationType)type) != RegistrationModeDisable) {
             _at.remove_urc_handler(at_reg[type].urc_prefix, _urc_funcs[type]);
         }
     }
@@ -72,7 +72,7 @@ nsapi_error_t AT_CellularNetwork::init()
     _urc_funcs[C_REG] = callback(this, &AT_CellularNetwork::urc_creg);
 
     for (int type = 0; type < CellularNetwork::C_MAX; type++) {
-        if (has_registration((RegistrationType)type)) {
+        if (has_registration((RegistrationType)type) != RegistrationModeDisable) {
             if (_at.set_urc_handler(at_reg[type].urc_prefix, _urc_funcs[type]) != NSAPI_ERROR_OK) {
                 return NSAPI_ERROR_NO_MEMORY;
             }
@@ -195,7 +195,7 @@ void AT_CellularNetwork::urc_cgreg()
 }
 
 nsapi_error_t AT_CellularNetwork::set_credentials(const char *apn,
-        const char *username, const char *password)
+                                                  const char *username, const char *password)
 {
     free_credentials();
 
@@ -210,6 +210,9 @@ nsapi_error_t AT_CellularNetwork::set_credentials(const char *apn,
     }
 
     if (username && (len = strlen(username)) > 0) {
+        if (!is_supported(AT_CGAUTH)) { // APN authentication is needed with username/password
+            return NSAPI_ERROR_UNSUPPORTED;
+        }
         _uname = (char *)malloc(len * sizeof(char) + 1);
         if (_uname) {
             memcpy(_uname, username, len + 1);
@@ -231,7 +234,7 @@ nsapi_error_t AT_CellularNetwork::set_credentials(const char *apn,
 }
 
 nsapi_error_t AT_CellularNetwork::set_credentials(const char *apn,
-        AuthenticationType type, const char *username, const char *password)
+                                                  AuthenticationType type, const char *username, const char *password)
 {
     nsapi_error_t err = set_credentials(apn, username, password);
     if (err) {
@@ -244,7 +247,7 @@ nsapi_error_t AT_CellularNetwork::set_credentials(const char *apn,
 }
 
 nsapi_error_t AT_CellularNetwork::connect(const char *apn,
-        const char *username, const char *password)
+                                          const char *username, const char *password)
 {
     nsapi_error_t err = set_credentials(apn, username, password);
     if (err) {
@@ -279,10 +282,7 @@ nsapi_error_t AT_CellularNetwork::activate_context()
     nsapi_error_t err = NSAPI_ERROR_OK;
 
     // try to find or create context with suitable stack
-    if (get_context()) {
-        // try to authenticate user before activating or modifying context
-        err = do_user_authentication();
-    } else {
+    if (!get_context()) {
         err = NSAPI_ERROR_NO_CONNECTION;
     }
 
@@ -315,6 +315,13 @@ nsapi_error_t AT_CellularNetwork::activate_context()
     _at.resp_stop();
 
     if (!_is_context_active) {
+        // authenticate before activating or modifying context
+        nsapi_error_t err = do_user_authentication();
+        if (err != NSAPI_ERROR_OK) {
+            tr_error("Cellular authentication failed!");
+            return err;
+        }
+
         tr_info("Activate PDP context %d", _cid);
         _at.cmd_start("AT+CGACT=1,");
         _at.write_int(_cid);
@@ -381,8 +388,15 @@ nsapi_error_t AT_CellularNetwork::open_data_channel()
 {
 #if NSAPI_PPP_AVAILABLE
     tr_info("Open data channel in PPP mode");
-    _at.cmd_start("AT+CGDATA=\"PPP\",");
-    _at.write_int(_cid);
+    if (is_supported(AT_CGDATA)) {
+        _at.cmd_start("AT+CGDATA=\"PPP\",");
+        _at.write_int(_cid);
+    } else {
+        MBED_ASSERT(_cid >= 0 && _cid <= 99);
+        char cmd_buf[sizeof("ATD*99***xx#")];
+        std::sprintf(cmd_buf, "ATD*99***%d#", _cid);
+        _at.cmd_start(cmd_buf);
+    }
     _at.cmd_stop();
 
     _at.resp_start("CONNECT", true);
@@ -421,11 +435,34 @@ nsapi_error_t AT_CellularNetwork::disconnect()
     return err;
 #else
     _at.lock();
-    _at.cmd_start("AT+CGACT=0,");
-    _at.write_int(_cid);
+
+    _is_context_active = false;
+    size_t active_contexts_count = 0;
+    _at.cmd_start("AT+CGACT?");
     _at.cmd_stop();
-    _at.resp_start();
+    _at.resp_start("+CGACT:");
+    while (_at.info_resp()) {
+        int context_id = _at.read_int();
+        int context_activation_state = _at.read_int();
+        if (context_activation_state == 1) {
+            active_contexts_count++;
+            if (context_id == _cid) {
+                _is_context_active = true;
+            }
+        }
+    }
     _at.resp_stop();
+
+    // 3GPP TS 27.007:
+    // For EPS, if an attempt is made to disconnect the last PDN connection, then the MT responds with ERROR
+    if (_is_context_active && (_current_act < RAT_E_UTRAN || active_contexts_count > 1)) {
+        _at.cmd_start("AT+CGACT=0,");
+        _at.write_int(_cid);
+        _at.cmd_stop();
+        _at.resp_start();
+        _at.resp_stop();
+    }
+
     _at.restore_at_timeout();
 
     _at.remove_urc_handler("+CGEV:", callback(this, &AT_CellularNetwork::urc_cgev));
@@ -479,6 +516,9 @@ nsapi_error_t AT_CellularNetwork::do_user_authentication()
 {
     // if user has defined user name and password we need to call CGAUTH before activating or modifying context
     if (_pwd && _uname) {
+        if (!is_supported(AT_CGAUTH)) {
+            return NSAPI_ERROR_UNSUPPORTED;
+        }
         _at.cmd_start("AT+CGAUTH=");
         _at.write_int(_cid);
         _at.write_int(_authentication_type);
@@ -680,13 +720,16 @@ nsapi_error_t AT_CellularNetwork::set_registration_urc(RegistrationType type, bo
     int index = (int)type;
     MBED_ASSERT(index >= 0 && index < C_MAX);
 
-    if (!has_registration(type)) {
+    RegistrationMode mode = has_registration(type);
+    if (mode == RegistrationModeDisable) {
         return NSAPI_ERROR_UNSUPPORTED;
     } else {
         _at.lock();
         if (urc_on) {
             _at.cmd_start(at_reg[index].cmd);
-            _at.write_string("=2", false);
+            const uint8_t ch_eq = '=';
+            _at.write_bytes(&ch_eq, 1);
+            _at.write_int((int)mode);
             _at.cmd_stop();
         } else {
             _at.cmd_start(at_reg[index].cmd);
@@ -778,7 +821,7 @@ nsapi_error_t AT_CellularNetwork::get_registration_status(RegistrationType type,
     int i = (int)type;
     MBED_ASSERT(i >= 0 && i < C_MAX);
 
-    if (!has_registration(at_reg[i].type)) {
+    if (has_registration(at_reg[i].type) == RegistrationModeDisable) {
         return NSAPI_ERROR_UNSUPPORTED;
     }
 
@@ -812,10 +855,10 @@ nsapi_error_t AT_CellularNetwork::get_cell_id(int &cell_id)
     return NSAPI_ERROR_OK;
 }
 
-bool AT_CellularNetwork::has_registration(RegistrationType reg_type)
+AT_CellularNetwork::RegistrationMode AT_CellularNetwork::has_registration(RegistrationType reg_type)
 {
     (void)reg_type;
-    return true;
+    return RegistrationModeLAC;
 }
 
 nsapi_error_t AT_CellularNetwork::set_attach(int /*timeout*/)
@@ -1012,7 +1055,7 @@ nsapi_error_t AT_CellularNetwork::scan_plmn(operList_t &operators, int &opsCount
 }
 
 nsapi_error_t AT_CellularNetwork::set_ciot_optimization_config(Supported_UE_Opt supported_opt,
-        Preferred_UE_Opt preferred_opt)
+                                                               Preferred_UE_Opt preferred_opt)
 {
     _at.lock();
 
@@ -1029,7 +1072,7 @@ nsapi_error_t AT_CellularNetwork::set_ciot_optimization_config(Supported_UE_Opt 
 }
 
 nsapi_error_t AT_CellularNetwork::get_ciot_optimization_config(Supported_UE_Opt &supported_opt,
-        Preferred_UE_Opt &preferred_opt)
+                                                               Preferred_UE_Opt &preferred_opt)
 {
     _at.lock();
 
@@ -1265,7 +1308,7 @@ nsapi_error_t AT_CellularNetwork::get_operator_names(operator_names_list &op_nam
 {
     _at.lock();
 
-    _at.cmd_start("AT+COPN?");
+    _at.cmd_start("AT+COPN");
     _at.cmd_stop();
 
     _at.resp_start("+COPN:");

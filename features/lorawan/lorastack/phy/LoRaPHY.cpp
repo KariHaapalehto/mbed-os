@@ -248,6 +248,45 @@ void LoRaPHY::copy_channel_mask(uint16_t *dest_mask, uint16_t *src_mask, uint8_t
     }
 }
 
+void LoRaPHY::intersect_channel_mask(const uint16_t *source,
+                                     uint16_t *destination, uint8_t size)
+{
+    if (!source || !destination || size == 0) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < size; i++) {
+        destination[i] &= source[i];
+    }
+}
+
+void LoRaPHY::fill_channel_mask_with_fsb(const uint16_t *expectation,
+                                         const uint16_t *fsb_mask,
+                                         uint16_t *destination,
+                                         uint8_t size)
+{
+    if (!expectation || !fsb_mask || !destination || size == 0) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < size; i++) {
+        destination[i] = expectation[i] & fsb_mask[i];
+    }
+
+}
+
+void LoRaPHY::fill_channel_mask_with_value(uint16_t *channel_mask,
+                                     uint16_t value, uint8_t size)
+{
+    if (!channel_mask || size == 0) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < size; i++) {
+        channel_mask[i] = value;
+    }
+}
+
 void LoRaPHY::set_last_tx_done(uint8_t channel, bool joined, lorawan_time_t last_tx_done_time)
 {
     band_t *band_table = (band_t *) phy_params.bands.table;
@@ -270,8 +309,7 @@ lorawan_time_t LoRaPHY::update_band_timeoff(bool joined, bool duty_cycle,
 
     // Update bands Time OFF
     for (uint8_t i = 0; i < nb_bands; i++) {
-
-        if (joined == false) {
+        if (MBED_CONF_LORA_DUTY_CYCLE_ON_JOIN && joined == false) {
             uint32_t txDoneTime =  MAX(_lora_time->get_elapsed_time(bands[i].last_join_tx_time),
                                        (duty_cycle == true) ?
                                        _lora_time->get_elapsed_time(bands[i].last_tx_time) : 0);
@@ -283,7 +321,6 @@ lorawan_time_t LoRaPHY::update_band_timeoff(bool joined, bool duty_cycle,
             if (bands[i].off_time != 0) {
                 next_tx_delay = MIN(bands[i].off_time - txDoneTime, next_tx_delay);
             }
-
         } else {
             // if network has been joined
             if (duty_cycle == true) {
@@ -451,7 +488,7 @@ uint8_t LoRaPHY::get_bandwidth(uint8_t dr)
     }
 }
 
-uint8_t LoRaPHY::enabled_channel_count(bool joined, uint8_t datarate,
+uint8_t LoRaPHY::enabled_channel_count(uint8_t datarate,
                                        const uint16_t *channel_mask,
                                        uint8_t *channel_indices,
                                        uint8_t *delayTx)
@@ -514,7 +551,9 @@ void LoRaPHY::reset_to_default_values(loramac_protocol_params *params, bool init
 
     params->sys_params.channel_tx_power = get_default_tx_power();
 
-    params->sys_params.channel_data_rate = get_default_tx_datarate();
+    // We shall always start with highest achievable data rate.
+    // Subsequent decrease in data rate will mean increase in range henceforth.
+    params->sys_params.channel_data_rate = get_default_max_tx_datarate();
 
     params->sys_params.rx1_dr_offset = phy_params.default_rx1_dr_offset;
 
@@ -558,6 +597,11 @@ uint8_t LoRaPHY::get_minimum_tx_datarate()
 uint8_t LoRaPHY::get_default_tx_datarate()
 {
     return phy_params.default_datarate;
+}
+
+uint8_t  LoRaPHY::get_default_max_tx_datarate()
+{
+    return phy_params.default_max_datarate;
 }
 
 uint8_t LoRaPHY::get_default_tx_power()
@@ -845,7 +889,8 @@ bool LoRaPHY::rx_config(rx_config_params_t *rx_conf)
                               false, rx_conf->is_rx_continuous);
     } else {
         modem = MODEM_LORA;
-        _radio->set_rx_config(modem, rx_conf->bandwidth, phy_dr, 1, 0, 8,
+        _radio->set_rx_config(modem, rx_conf->bandwidth, phy_dr, 1, 0,
+                              MBED_CONF_LORA_DOWNLINK_PREAMBLE_LENGTH,
                               rx_conf->window_timeout, false, 0, false, 0, 0,
                               true, rx_conf->is_rx_continuous);
     }
@@ -895,7 +940,8 @@ bool LoRaPHY::tx_config(tx_config_params_t *tx_conf, int8_t *tx_power,
                               3000);
     } else {
         modem = MODEM_LORA;
-        _radio->set_tx_config(modem, phy_tx_power, 0, bandwidth, phy_dr, 1, 8,
+        _radio->set_tx_config(modem, phy_tx_power, 0, bandwidth, phy_dr, 1,
+                              MBED_CONF_LORA_UPLINK_PREAMBLE_LENGTH,
                               false, true, 0, 0, false, 3000);
     }
 
@@ -1173,7 +1219,7 @@ void LoRaPHY::calculate_backoff(bool joined, bool last_tx_was_join_req, bool dc_
     // Reset time-off to initial value.
     band_table[band_idx].off_time = 0;
 
-    if (joined == false) {
+    if (MBED_CONF_LORA_DUTY_CYCLE_ON_JOIN && joined == false) {
         // Get the join duty cycle
         if (elapsed_time < 3600000) {
             join_duty_cycle = BACKOFF_DC_1_HOUR;
@@ -1236,7 +1282,7 @@ lorawan_status_t LoRaPHY::set_next_channel(channel_selection_params_t *params,
                                             band_table, phy_params.bands.size);
 
         // Search how many channels are enabled
-        channel_count = enabled_channel_count(params->joined, params->current_datarate,
+        channel_count = enabled_channel_count(params->current_datarate,
                                               phy_params.channels.mask,
                                               enabled_channels, &delay_tx);
     } else {

@@ -63,7 +63,7 @@ void OS_Tick_Disable (void)
 /// Acknowledge System Timer IRQ.
 void OS_Tick_AcknowledgeIRQ (void)
 {
-    os_timer->schedule_tick();
+
 }
 
 /// Get System Timer count.
@@ -109,13 +109,6 @@ static void default_idle_hook(void)
     osKernelResume(os_timer->resume());
 }
 
-#elif defined(FEATURE_UVISOR)
-
-static void default_idle_hook(void)
-{
-    /* uVisor can't sleep. See <https://github.com/ARMmbed/uvisor/issues/420>
-     * for details. */
-}
 
 #else
 

@@ -424,6 +424,14 @@ public:
     uint8_t get_default_tx_datarate();
 
     /**
+     * @brief get_default_max_tx_datarate Gets the maximum achievable data rate for
+     *        LoRa modulation. This will always be the highest data rate achievable with
+     *        LoRa as defined in the regional specifications.
+     * @return Maximum achievable data rate with LoRa modulation.
+     */
+    uint8_t get_default_max_tx_datarate();
+
+    /**
      * @brief get_default_tx_power Gets the default TX power
      * @return Default TX power
      */
@@ -528,6 +536,26 @@ protected:
     LoRaPHY();
 
     /**
+     * Sets the intersection of source and destination channel masks
+     * into the destination.
+     */
+    void intersect_channel_mask(const uint16_t *source, uint16_t *destination,
+                                uint8_t size);
+
+    /**
+     * Fills channel mask array based upon the provided FSB mask
+     */
+    void fill_channel_mask_with_fsb(const uint16_t *expectation,
+                                    const uint16_t *fsb_mask,
+                                    uint16_t *channel_mask, uint8_t size);
+
+    /**
+     * Fills channel mask array with a given value
+     */
+    void fill_channel_mask_with_value(uint16_t *channel_mask,
+                                      uint16_t value, uint8_t size);
+
+    /**
      * Looks up corresponding band for a frequency. Returns -1 if not in any band.
      */
     int lookup_band_for_frequency(uint32_t freq) const;
@@ -624,7 +652,7 @@ protected:
      */
     uint8_t get_bandwidth(uint8_t dr_index);
 
-    uint8_t enabled_channel_count(bool joined, uint8_t datarate,
+    uint8_t enabled_channel_count(uint8_t datarate,
                                   const uint16_t *mask, uint8_t* enabledChannels,
                                   uint8_t* delayTx);
 

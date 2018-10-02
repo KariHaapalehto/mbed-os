@@ -24,6 +24,8 @@
 #endif
 #include "CellularLog.h"
 #include "CellularCommon.h"
+#include "CellularDevice.h"
+#include "CellularUtil.h"
 
 // timeout to wait for AT responses
 #define TIMEOUT_POWER_ON     (1*1000)
@@ -37,13 +39,12 @@
 
 #define RETRY_COUNT_DEFAULT 3
 
-namespace mbed
-{
+namespace mbed {
 
 CellularConnectionFSM::CellularConnectionFSM() :
-        _serial(0), _state(STATE_INIT), _next_state(_state), _status_callback(0), _event_status_cb(0), _network(0), _power(0), _sim(0),
-        _queue(8 * EVENTS_EVENT_SIZE), _queue_thread(0), _cellularDevice(0), _retry_count(0), _event_timeout(-1),
-        _at_queue(8 * EVENTS_EVENT_SIZE), _event_id(0), _plmn(0), _command_success(false), _plmn_network_found(false)
+    _serial(0), _state(STATE_INIT), _next_state(_state), _status_callback(0), _event_status_cb(0), _network(0), _power(0), _sim(0),
+    _queue(8 * EVENTS_EVENT_SIZE), _queue_thread(0), _cellularDevice(0), _retry_count(0), _event_timeout(-1),
+    _at_queue(0), _event_id(0), _plmn(0), _command_success(false), _plmn_network_found(false)
 {
     memset(_sim_pin, 0, sizeof(_sim_pin));
 #if MBED_CONF_CELLULAR_RANDOM_MAX_START_DELAY == 0
@@ -83,12 +84,20 @@ void CellularConnectionFSM::stop()
         _queue_thread = NULL;
     }
 
-    delete _cellularDevice;
-    _cellularDevice = NULL;
-    // _cellularDevice closes all interfaces in destructor
-    _power = NULL;
-    _network = NULL;
-    _sim = NULL;
+    if (_power) {
+        _cellularDevice->close_power();
+        _power = NULL;
+    }
+
+    if (_network) {
+        _cellularDevice->close_network();
+        _network = NULL;
+    }
+
+    if (_sim) {
+        _cellularDevice->close_sim();
+        _sim = NULL;
+    }
 
     _state = STATE_INIT;
     _next_state = _state;
@@ -97,7 +106,7 @@ void CellularConnectionFSM::stop()
 nsapi_error_t CellularConnectionFSM::init()
 {
     tr_info("CELLULAR_DEVICE: %s", CELLULAR_STRINGIFY(CELLULAR_DEVICE));
-    _cellularDevice = new CELLULAR_DEVICE(_at_queue);
+    _cellularDevice = CellularDevice::get_default_instance();
     if (!_cellularDevice) {
         stop();
         return NSAPI_ERROR_NO_MEMORY;
@@ -121,7 +130,8 @@ nsapi_error_t CellularConnectionFSM::init()
         return NSAPI_ERROR_NO_MEMORY;
     }
 
-    _at_queue.chain(&_queue);
+    _at_queue = _cellularDevice->get_queue();
+    _at_queue->chain(&_queue);
 
     _retry_count = 0;
     _state = STATE_INIT;
@@ -147,7 +157,7 @@ bool CellularConnectionFSM::power_on()
 void CellularConnectionFSM::set_sim_pin(const char *sim_pin)
 {
     strncpy(_sim_pin, sim_pin, sizeof(_sim_pin));
-    _sim_pin[sizeof(_sim_pin)-1] = '\0';
+    _sim_pin[sizeof(_sim_pin) - 1] = '\0';
 }
 
 void CellularConnectionFSM::set_plmn(const char *plmn)
@@ -202,7 +212,7 @@ bool CellularConnectionFSM::is_registered()
 }
 
 bool CellularConnectionFSM::get_network_registration(CellularNetwork::RegistrationType type,
-        CellularNetwork::RegistrationStatus &status, bool &is_registered)
+                                                     CellularNetwork::RegistrationStatus &status, bool &is_registered)
 {
     is_registered = false;
     bool is_roaming = false;
@@ -395,8 +405,11 @@ void CellularConnectionFSM::state_power_on()
     }
 }
 
-void CellularConnectionFSM::device_ready()
+bool CellularConnectionFSM::device_ready()
 {
+    if (_cellularDevice->init_module(_serial) != NSAPI_ERROR_OK) {
+        return false;
+    }
     tr_info("Cellular device ready");
     if (_event_status_cb) {
         _event_status_cb((nsapi_event_t)CellularDeviceReady, 0);
@@ -404,14 +417,16 @@ void CellularConnectionFSM::device_ready()
     _power->remove_device_ready_urc_cb(mbed::callback(this, &CellularConnectionFSM::ready_urc_cb));
     _cellularDevice->close_power();
     _power = NULL;
+    return true;
 }
 
 void CellularConnectionFSM::state_device_ready()
 {
     _cellularDevice->set_timeout(TIMEOUT_POWER_ON);
     if (_power->set_at_mode() == NSAPI_ERROR_OK) {
-        device_ready();
-        enter_to_state(STATE_SIM_PIN);
+        if (device_ready()) {
+            enter_to_state(STATE_SIM_PIN);
+        }
     } else {
         if (_retry_count == 0) {
             (void)_power->set_device_ready_urc_cb(mbed::callback(this, &CellularConnectionFSM::ready_urc_cb));
@@ -581,7 +596,7 @@ void CellularConnectionFSM::event()
         if (_event_timeout == -1) {
             _event_timeout = 0;
         }
-        _event_id = _queue.call_in(_event_timeout*1000, callback(this, &CellularConnectionFSM::event));
+        _event_id = _queue.call_in(_event_timeout * 1000, callback(this, &CellularConnectionFSM::event));
         if (!_event_id) {
             report_failure("Cellular event failure!");
             return;
@@ -659,9 +674,10 @@ void CellularConnectionFSM::ready_urc_cb()
     tr_debug("Device ready URC func called");
     if (_state == STATE_DEVICE_READY && _power->set_at_mode() == NSAPI_ERROR_OK) {
         tr_debug("State was STATE_DEVICE_READY and at mode ready, cancel state and move to next");
-        _queue.cancel(_event_id);
-        device_ready();
-        continue_from_state(STATE_SIM_PIN);
+        if (device_ready()) {
+            _queue.cancel(_event_id);
+            continue_from_state(STATE_SIM_PIN);
+        }
     }
 }
 

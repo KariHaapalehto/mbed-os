@@ -37,6 +37,8 @@
 
 #include "mbed.h"
 
+
+#include "AT_CellularInformation.h"
 #include "CellularConnectionFSM.h"
 #include "CellularDevice.h"
 #include "../../cellular_tests_common.h"
@@ -76,12 +78,14 @@ static void test_information_interface()
 {
     CellularInformation *info = cellular.get_device()->open_information(&cellular_serial);
     const int kbuf_size = 100;
-    char *buf = (char*)malloc(sizeof(char) * kbuf_size);
+    char *buf = (char *)malloc(sizeof(char) * kbuf_size);
 
     TEST_ASSERT(info->get_manufacturer(buf, kbuf_size) == NSAPI_ERROR_OK);
     TEST_ASSERT(info->get_model(buf, kbuf_size) == NSAPI_ERROR_OK);
     TEST_ASSERT(info->get_revision(buf, kbuf_size) == NSAPI_ERROR_OK);
-    TEST_ASSERT(info->get_serial_number(buf, kbuf_size, CellularInformation::SN) == NSAPI_ERROR_OK);
+    TEST_ASSERT((info->get_serial_number(buf, kbuf_size, CellularInformation::SN) == NSAPI_ERROR_OK) ||
+               ((((AT_CellularInformation *)info)->get_device_error().errType == 3) &&    // 3 == CME error from the modem
+               (((AT_CellularInformation *)info)->get_device_error().errCode == 4)));     // 4 == "operation not supported"
 
     nsapi_error_t err = info->get_serial_number(buf, kbuf_size, CellularInformation::IMEI);
     TEST_ASSERT(err == NSAPI_ERROR_UNSUPPORTED || err == NSAPI_ERROR_OK);
@@ -112,7 +116,7 @@ static Case cases[] = {
 
 static utest::v1::status_t test_setup(const size_t number_of_cases)
 {
-    GREENTEA_SETUP(10*60, "default_auto");
+    GREENTEA_SETUP(10 * 60, "default_auto");
     return verbose_test_setup_handler(number_of_cases);
 }
 

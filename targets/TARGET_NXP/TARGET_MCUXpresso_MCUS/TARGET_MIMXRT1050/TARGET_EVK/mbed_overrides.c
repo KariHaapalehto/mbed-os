@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 #include "pinmap.h"
-
 #include "fsl_clock_config.h"
 #include "fsl_clock.h"
+#include "fsl_xbara.h"
+#include "lpm.h"
 
 #define LPSPI_CLOCK_SOURCE_DIVIDER (7U)
 #define LPI2C_CLOCK_SOURCE_DIVIDER (5U)
@@ -124,11 +125,39 @@ void BOARD_ConfigMPU(void)
     SCB_EnableICache();
 }
 
+#if defined(TOOLCHAIN_GCC_ARM)
+extern uint32_t __ram_function_flash_start[];
+#define __RAM_FUNCTION_FLASH_START __ram_function_flash_start
+extern uint32_t __ram_function_ram_start[];
+#define __RAM_FUNCTION_RAM_START __ram_function_ram_start
+extern uint32_t __ram_function_size[];
+#define __RAM_FUNCTION_SIZE __ram_function_size
+void Board_CopyToRam()
+{
+    unsigned char *source;
+    unsigned char *destiny;
+    unsigned int size;
+
+    source = (unsigned char *)(__RAM_FUNCTION_FLASH_START);
+    destiny = (unsigned char *)(__RAM_FUNCTION_RAM_START);
+    size = (unsigned long)(__RAM_FUNCTION_SIZE);
+
+    while (size--)
+    {
+        *destiny++ = *source++;
+    }
+}
+#endif
+
 // called before main
 void mbed_sdk_init()
 {
     BOARD_ConfigMPU();
     BOARD_BootClockRUN();
+#if defined(TOOLCHAIN_GCC_ARM)
+    Board_CopyToRam();
+#endif
+    LPM_Init();
 }
 
 void spi_setup_clock()
@@ -189,9 +218,35 @@ uint32_t i2c_get_clock()
     return ((CLOCK_GetFreq(kCLOCK_Usb1PllClk) / 8) / (LPI2C_CLOCK_SOURCE_DIVIDER + 1U));
 }
 
-void pwm_setup_clock()
+void pwm_setup(uint32_t instance)
 {
-    /* Use default settings */
+    /* Use default clock settings */
+    /* Set the PWM Fault inputs to a low value */
+    XBARA_Init(XBARA1);
+
+    XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm1234Fault2);
+    XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm1234Fault3);
+
+    switch (instance) {
+        case 1:
+            XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm1Fault0);
+            XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm1Fault1);
+            break;
+        case 2:
+            XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm2Fault0);
+            XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm2Fault1);
+            break;
+        case 3:
+            XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm3Fault0);
+            XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm3Fault1);
+            break;
+        case 4:
+            XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm4Fault0);
+            XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh, kXBARA1_OutputFlexpwm4Fault1);
+            break;
+        default:
+            break;
+    }
 }
 
 uint32_t pwm_get_clock()

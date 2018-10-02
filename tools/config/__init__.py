@@ -63,7 +63,7 @@ BOOTLOADER_OVERRIDES = ROM_OVERRIDES | RAM_OVERRIDES
 
 
 ALLOWED_FEATURES = [
-    "UVISOR", "BLE", "CLIENT", "IPV4", "LWIP", "COMMON_PAL", "STORAGE",
+    "BOOTLOADER","UVISOR", "BLE", "CLIENT", "IPV4", "LWIP", "COMMON_PAL", "STORAGE",
     "NANOSTACK","CRYPTOCELL310",
     # Nanostack configurations
     "LOWPAN_BORDER_ROUTER", "LOWPAN_HOST", "LOWPAN_ROUTER", "NANOSTACK_FULL",
@@ -495,7 +495,8 @@ class Config(object):
         self.target_labels = self.target.labels
         for override in BOOTLOADER_OVERRIDES:
             _, attr = override.split(".")
-            setattr(self.target, attr, None)
+            if not hasattr(self.target, attr):
+                setattr(self.target, attr, None)
 
         self.cumulative_overrides = {key: ConfigCumulativeOverride(key)
                                      for key in CUMULATIVE_ATTRIBUTES}
@@ -1124,10 +1125,14 @@ class Config(object):
         Config._check_required_parameters(params)
         params_with_values = [p for p in params.values() if p.value is not None]
         ctx = {
-            "cfg_params" : [(p.macro_name, str(p.value), p.set_by)
-                            for p in params_with_values],
-            "macros": [(m.macro_name, str(m.macro_value or ""), m.defined_by)
-                       for m in macros.values()],
+            "cfg_params": sorted([
+                (p.macro_name, str(p.value), p.set_by)
+                for p in params_with_values
+            ]),
+            "macros": sorted([
+                (m.macro_name, str(m.macro_value or ""), m.defined_by)
+                for m in macros.values()
+            ]),
             "name_len":  max([len(m.macro_name) for m in macros.values()] +
                              [len(m.macro_name) for m in params_with_values]
                              + [0]),

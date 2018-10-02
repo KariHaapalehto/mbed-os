@@ -21,8 +21,8 @@ using namespace mbed;
 
 InternetSocket::InternetSocket()
     : _stack(0), _socket(0), _timeout(osWaitForever),
-      _readers(0), _writers(0), _factory_allocated(false),
-      _pending(0)
+      _readers(0), _writers(0), _pending(0),
+      _factory_allocated(false)
 {
 }
 
@@ -186,7 +186,7 @@ nsapi_error_t InternetSocket::getsockopt(int level, int optname, void *optval, u
 }
 void InternetSocket::event()
 {
-    _event_flag.set(READ_FLAG|WRITE_FLAG);
+    _event_flag.set(READ_FLAG | WRITE_FLAG);
 
     _pending += 1;
     if (_callback && _pending == 1) {

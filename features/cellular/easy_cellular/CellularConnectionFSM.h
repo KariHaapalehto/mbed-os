@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#ifndef _CELLULAR_CONNECTION_UTIL_H
-#define _CELLULAR_CONNECTION_UTIL_H
+#ifndef _CELLULAR_CONNECTION_FSM_H
+#define _CELLULAR_CONNECTION_FSM_H
 
 #include "CellularTargets.h"
 #if defined(CELLULAR_DEVICE) || defined(DOXYGEN_ONLY)
@@ -29,12 +29,10 @@
 #include "CellularNetwork.h"
 #include "CellularPower.h"
 #include "CellularSIM.h"
-#include "CellularUtil.h"
-
-// modem type is defined as CELLULAR_DEVICE macro
-#include CELLULAR_STRINGIFY(CELLULAR_DEVICE.h)
 
 namespace mbed {
+
+class CellularDevice;
 
 const int PIN_SIZE = 8;
 const int MAX_RETRY_ARRAY_SIZE = 10;
@@ -43,8 +41,7 @@ const int MAX_RETRY_ARRAY_SIZE = 10;
  *
  *  Finite State Machine for connecting to cellular network
  */
-class CellularConnectionFSM
-{
+class CellularConnectionFSM {
 public:
     CellularConnectionFSM();
     virtual ~CellularConnectionFSM();
@@ -148,7 +145,7 @@ public:
      *
      *  @param plmn operator in numeric format. See more from 3GPP TS 27.007 chapter 7.3.
      */
-    void set_plmn(const char* plmn);
+    void set_plmn(const char *plmn);
 
     /** returns readable format of the given state. Used for printing states while debugging.
      *
@@ -162,7 +159,7 @@ private:
     bool open_sim();
     bool get_network_registration(CellularNetwork::RegistrationType type, CellularNetwork::RegistrationStatus &status, bool &is_registered);
     bool is_registered();
-    void device_ready();
+    bool device_ready();
 
     // state functions to keep state machine simple
     void state_init();
@@ -186,7 +183,7 @@ private:
     NetworkStack *get_stack();
 
 private:
-    void report_failure(const char* msg);
+    void report_failure(const char *msg);
     void event();
     void ready_urc_cb();
 
@@ -203,14 +200,14 @@ private:
     events::EventQueue _queue;
     rtos::Thread *_queue_thread;
     CellularDevice *_cellularDevice;
-    char _sim_pin[PIN_SIZE+1];
+    char _sim_pin[PIN_SIZE + 1];
     int _retry_count;
     int _start_time;
     int _event_timeout;
 
     uint16_t _retry_timeout_array[MAX_RETRY_ARRAY_SIZE];
     int _retry_array_length;
-    events::EventQueue _at_queue;
+    events::EventQueue *_at_queue;
     char _st_string[20];
     int _event_id;
     const char *_plmn;
@@ -222,4 +219,4 @@ private:
 
 #endif // CELLULAR_DEVICE || DOXYGEN
 
-#endif /* _CELLULAR_CONNECTION_UTIL_H */
+#endif // _CELLULAR_CONNECTION_FSM_H

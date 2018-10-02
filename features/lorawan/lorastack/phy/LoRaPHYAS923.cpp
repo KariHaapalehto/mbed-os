@@ -67,7 +67,7 @@
  */
 #define AS923_DEFAULT_DATARATE                      DR_2
 
-#define AS923_DEFAULT_MAX_DATARATE                  DR_7
+#define AS923_DEFAULT_MAX_DATARATE                  DR_5
 
 /*!
  * The minimum datarate which is used when the
@@ -361,8 +361,7 @@ lorawan_status_t LoRaPHYAS923::set_next_channel(channel_selection_params_t* next
                                             bands, AS923_MAX_NB_BANDS);
 
         // Search how many channels are enabled
-        nb_enabled_channels = enabled_channel_count(next_channel_prams->joined,
-                                                    next_channel_prams->current_datarate,
+        nb_enabled_channels = enabled_channel_count(next_channel_prams->current_datarate,
                                                     channel_mask,
                                                     enabled_channels, &delay_tx);
     }  else {

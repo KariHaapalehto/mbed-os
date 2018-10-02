@@ -34,8 +34,7 @@ namespace mbed {
  *
  * Implements NetworkStack and introduces interface for modem specific stack implementations.
  */
-class AT_CellularStack : public NetworkStack, public AT_CellularBase
-{
+class AT_CellularStack : public NetworkStack, public AT_CellularBase {
 
 public:
     AT_CellularStack(ATHandler &at, int cid, nsapi_ip_stack_t stack_type);
@@ -64,26 +63,25 @@ protected: // NetworkStack
     virtual nsapi_error_t socket_connect(nsapi_socket_t handle, const SocketAddress &address);
 
     virtual nsapi_error_t socket_accept(nsapi_socket_t server,
-                                        nsapi_socket_t *handle, SocketAddress *address=0);
+                                        nsapi_socket_t *handle, SocketAddress *address = 0);
 
     virtual nsapi_size_or_error_t socket_send(nsapi_socket_t handle,
-            const void *data, nsapi_size_t size);
+                                              const void *data, nsapi_size_t size);
 
     virtual nsapi_size_or_error_t socket_recv(nsapi_socket_t handle,
-            void *data, nsapi_size_t size);
+                                              void *data, nsapi_size_t size);
 
     virtual nsapi_size_or_error_t socket_sendto(nsapi_socket_t handle, const SocketAddress &address,
-            const void *data, nsapi_size_t size);
+                                                const void *data, nsapi_size_t size);
 
     virtual nsapi_size_or_error_t socket_recvfrom(nsapi_socket_t handle, SocketAddress *address,
-            void *buffer, nsapi_size_t size);
+                                                  void *buffer, nsapi_size_t size);
 
     virtual void socket_attach(nsapi_socket_t handle, void (*callback)(void *), void *data);
 
 protected:
 
-    class CellularSocket
-    {
+    class CellularSocket {
     public:
         // Socket id from cellular device
         int id;
@@ -98,6 +96,7 @@ protected:
         bool started; // socket has been opened on modem stack
         bool tx_ready; // socket is ready for sending on modem stack
         bool rx_avail; // socket has data for reading on modem stack
+        nsapi_size_t pending_bytes; // The number of received bytes pending
     };
 
     /**
@@ -137,7 +136,7 @@ protected:
     *                 code on failure
     */
     virtual nsapi_size_or_error_t socket_sendto_impl(CellularSocket *socket, const SocketAddress &address,
-            const void *data, nsapi_size_t size) = 0;
+                                                     const void *data, nsapi_size_t size) = 0;
 
     /**
      *  Implements modem specific AT command set for receiving data
@@ -150,7 +149,7 @@ protected:
      *                  code on failure
      */
     virtual nsapi_size_or_error_t socket_recvfrom_impl(CellularSocket *socket, SocketAddress *address,
-            void *buffer, nsapi_size_t size) = 0;
+                                                       void *buffer, nsapi_size_t size) = 0;
 
     // socket container
     CellularSocket **_socket;
@@ -166,6 +165,10 @@ protected:
 
     // stack type from PDP context
     nsapi_ip_stack_t _stack_type;
+
+private:
+    // mutex for write/read to a _socket array, needed when multiple threads may open sockets simultaneously
+    PlatformMutex _socket_mutex;
 };
 
 } // namespace mbed
