@@ -25,6 +25,7 @@ from tools.hooks import hook_tool
 from tools.utils import run_cmd, NotSupportedException
 
 class GCC(mbedToolchain):
+    OFFICIALLY_SUPPORTED = True
     LINKER_EXT = '.ld'
     LIBRARY_EXT = '.a'
 
@@ -140,7 +141,7 @@ class GCC(mbedToolchain):
                 "file": "",
                 "line": "",
                 "col": "",
-                "severity": "ERROR",
+                "severity": "Warning",
             })
 
     def is_not_supported_error(self, output):

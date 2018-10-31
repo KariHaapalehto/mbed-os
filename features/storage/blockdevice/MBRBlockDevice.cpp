@@ -15,9 +15,11 @@
  */
 
 #include "MBRBlockDevice.h"
-#include "mbed_critical.h"
+#include "platform/mbed_critical.h"
+#include "platform/mbed_toolchain.h"
+#include "platform/mbed_assert.h"
 #include <algorithm>
-
+#include <string.h>
 
 // On disk structures, all entries are little endian
 MBED_PACKED(struct) mbr_entry {
@@ -95,6 +97,18 @@ static int partition_absolute(
         table->signature[0] = 0x55;
         table->signature[1] = 0xaa;
         memset(table->entries, 0, sizeof(table->entries));
+    }
+
+    // For Windows-formatted SD card, it is not partitioned (no MBR), but its PBR has the
+    // same boot signature (0xaa55) as MBR. We would easily mis-recognize this SD card has valid
+    // partitions if we only check partition type. We add check by only accepting 0x00 (inactive)
+    // /0x80 (active) for valid partition status.
+    for (int i = 1; i <= 4; i++) {
+        if (table->entries[i-1].status != 0x00 &&
+            table->entries[i-1].status != 0x80) {
+            memset(table->entries, 0, sizeof(table->entries));
+            break;
+        }
     }
 
     // Setup new partition
@@ -238,6 +252,14 @@ int MBRBlockDevice::init()
     table = reinterpret_cast<struct mbr_table*>(&buffer[buffer_size - sizeof(struct mbr_table)]);
     if (table->signature[0] != 0x55 || table->signature[1] != 0xaa) {
         err = BD_ERROR_INVALID_MBR;
+        goto fail;
+    }
+
+    // Check for valid partition status
+    // Same reason as in partition_absolute regarding Windows-formatted SD card
+    if (table->entries[_part-1].status != 0x00 &&
+        table->entries[_part-1].status != 0x80) {
+        err = BD_ERROR_INVALID_PARTITION;
         goto fail;
     }
 

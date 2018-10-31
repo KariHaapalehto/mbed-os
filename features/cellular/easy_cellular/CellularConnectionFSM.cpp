@@ -172,23 +172,30 @@ bool CellularConnectionFSM::open_sim()
     // here you could add wait(secs) if you know start delay of your SIM
     if (_sim->get_sim_state(state) != NSAPI_ERROR_OK) {
         tr_info("Waiting for SIM (err while reading)...");
+        if (_event_status_cb) {
+            _event_status_cb((nsapi_event_t)CellularSIMStatusChanged, state);
+        }
         return false;
+    }
+
+    // report current state so callback can set sim pin if needed
+    if (_event_status_cb) {
+        _event_status_cb((nsapi_event_t)CellularSIMStatusChanged, state);
     }
 
     if (state == CellularSIM::SimStatePinNeeded) {
         if (strlen(_sim_pin)) {
-            tr_info("SIM pin required, entering pin: %s", _sim_pin);
+            tr_info("SIM pin required, entering pin");
             nsapi_error_t err = _sim->set_pin(_sim_pin);
             if (err) {
                 tr_error("SIM pin set failed with: %d, bailing out...", err);
             }
         } else {
-            tr_warn("PIN required but No SIM pin provided.");
+            // No sim pin provided even it's needed, stop state machine
+            tr_error("PIN required but No SIM pin provided.");
+            _retry_count = MAX_RETRY_ARRAY_SIZE;
+            return false;
         }
-    }
-
-    if (_event_status_cb) {
-        _event_status_cb((nsapi_event_t)CellularSIMStatusChanged, state);
     }
 
     return state == CellularSIM::SimStateReady;
@@ -216,13 +223,15 @@ bool CellularConnectionFSM::get_network_registration(CellularNetwork::Registrati
 {
     is_registered = false;
     bool is_roaming = false;
-    nsapi_error_t err = _network->get_registration_status(type, status);
+    CellularNetwork::registration_params_t reg_params;
+    nsapi_error_t err = _network->get_registration_params(type, reg_params);
     if (err != NSAPI_ERROR_OK) {
         if (err != NSAPI_ERROR_UNSUPPORTED) {
             tr_warn("Get network registration failed (type %d)!", type);
         }
         return false;
     }
+    status = reg_params._status;
     switch (status) {
         case CellularNetwork::RegisteredRoaming:
             is_roaming = true;
