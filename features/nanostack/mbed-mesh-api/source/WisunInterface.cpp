@@ -24,8 +24,7 @@
 #include "ns_trace.h"
 #define TRACE_GROUP "wisuI"
 
-class Nanostack::WisunInterface : public Nanostack::MeshInterface
-{
+class Nanostack::WisunInterface : public Nanostack::MeshInterface {
 public:
     virtual nsapi_error_t bringup(bool dhcp, const char *ip,
                                   const char *netmask, const char *gw,
@@ -45,7 +44,7 @@ private:
 
 Nanostack::WisunInterface *WisunInterface::get_interface() const
 {
-    return static_cast<Nanostack::WisunInterface*>(_interface);
+    return static_cast<Nanostack::WisunInterface *>(_interface);
 }
 
 nsapi_error_t WisunInterface::do_initialize()
@@ -61,8 +60,8 @@ nsapi_error_t WisunInterface::do_initialize()
 }
 
 nsapi_error_t Nanostack::WisunInterface::bringup(bool dhcp, const char *ip,
-                                                    const char *netmask, const char *gw,
-                                                    nsapi_ip_stack_t stack, bool blocking)
+                                                 const char *netmask, const char *gw,
+                                                 nsapi_ip_stack_t stack, bool blocking)
 {
     nanostack_lock();
 
