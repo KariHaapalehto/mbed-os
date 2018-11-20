@@ -119,7 +119,7 @@ public:
      *          MbedCRC <POLY_7BIT_SD, 7> ct; --- Valid POLY_7BIT_SD
      *          MbedCRC <0x1021, 16> ct; --- Valid POLY_16BIT_CCITT
      *          MbedCRC <POLY_16BIT_CCITT, 32> ct; --- Invalid, compilation error
-     *          MbedCRC <POLY_16BIT_CCITT, 32> ct (i,f,rd,rr) Consturctor can be used for not supported polynomials
+     *          MbedCRC <POLY_16BIT_CCITT, 32> ct (i,f,rd,rr) Constructor can be used for not supported polynomials
      *          MbedCRC<POLY_16BIT_CCITT, 16> sd(0, 0, false, false); Constructor can also be used for supported
      *             polynomials with different intial/final/reflect values
      *
@@ -302,6 +302,7 @@ public:
         return width;
     }
 
+#if !defined(DOXYGEN_ONLY)
 private:
     uint32_t _initial_value;
     uint32_t _final_xor;
@@ -546,6 +547,7 @@ private:
         }
         _mode = (_crc_table != NULL) ? TABLE : BITWISE;
     }
+#endif
 };
 
 #if   defined ( __CC_ARM )

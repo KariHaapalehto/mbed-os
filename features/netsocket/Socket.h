@@ -156,8 +156,8 @@ public:
      *  blocking operations such as send/recv/accept return
      *  NSAPI_ERROR_WOULD_BLOCK if they can not continue.
      *
-     *  set_blocking(false) is equivalent to set_timeout(-1)
-     *  set_blocking(true) is equivalent to set_timeout(0)
+     *  set_blocking(false) is equivalent to set_timeout(0)
+     *  set_blocking(true) is equivalent to set_timeout(-1)
      *
      *  @param blocking true for blocking mode, false for non-blocking mode.
      */
@@ -254,6 +254,17 @@ public:
      *  @return         NSAPI_ERROR_OK on success, negative error code on failure
      */
     virtual nsapi_error_t listen(int backlog = 1) = 0;
+
+    /** Get the remote-end peer associated with this socket.
+     *
+     * Copy the remote peer address to a SocketAddress structure pointed by
+     * address parameter. Socket must be connected to have a peer address
+     * associated.
+     *
+     *  @param address  Pointer to SocketAddress structure.
+     *  @return         NSAPI_ERROR_OK on success, negative error code on failure.
+     */
+    virtual nsapi_error_t getpeername(SocketAddress *address) = 0;
 };
 
 

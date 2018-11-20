@@ -62,6 +62,7 @@ nsapi_error_t InternetSocket::close()
 
     nsapi_error_t ret = NSAPI_ERROR_OK;
     if (!_socket)  {
+        _lock.unlock();
         return NSAPI_ERROR_NO_SOCKET;
     }
 
@@ -212,4 +213,16 @@ void InternetSocket::sigio(Callback<void()> callback)
 void InternetSocket::attach(Callback<void()> callback)
 {
     sigio(callback);
+}
+
+nsapi_error_t InternetSocket::getpeername(SocketAddress *address)
+{
+    if (!_socket) {
+        return NSAPI_ERROR_NO_SOCKET;
+    }
+    if (!_remote_peer) {
+        return NSAPI_ERROR_NO_CONNECTION;
+    }
+    *address = _remote_peer;
+    return NSAPI_ERROR_OK;
 }

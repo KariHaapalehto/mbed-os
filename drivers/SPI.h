@@ -163,7 +163,7 @@ public:
      *
      * This function locks the deep sleep until any event has occurred.
      *
-     * @param tx_buffer The TX buffer with data to be transfered. If NULL is passed,
+     * @param tx_buffer The TX buffer with data to be transferred. If NULL is passed,
      *                  the default SPI value is sent.
      * @param tx_length The length of TX buffer in bytes.
      * @param rx_buffer The RX buffer which is used for received data. If NULL is passed,
@@ -208,6 +208,7 @@ public:
      */
     int set_dma_usage(DMAUsage usage);
 
+#if !defined(DOXYGEN_ONLY)
 protected:
     /** SPI interrupt handler.
      */
@@ -215,7 +216,7 @@ protected:
 
     /** Start the transfer or put it on the queue.
      *
-     * @param tx_buffer The TX buffer with data to be transfered. If NULL is passed,
+     * @param tx_buffer The TX buffer with data to be transferred. If NULL is passed,
      *                  the default SPI value is sent
      * @param tx_length The length of TX buffer in bytes.
      * @param rx_buffer The RX buffer which is used for received data. If NULL is passed,
@@ -233,7 +234,7 @@ protected:
 
     /** Put a transfer on the transfer queue.
      *
-     * @param tx_buffer The TX buffer with data to be transfered. If NULL is passed,
+     * @param tx_buffer The TX buffer with data to be transferred. If NULL is passed,
      *                  the default SPI value is sent.
      * @param tx_length The length of TX buffer in bytes.
      * @param rx_buffer The RX buffer which is used for received data. If NULL is passed,
@@ -251,7 +252,7 @@ protected:
 
     /** Configure a callback, SPI peripheral, and initiate a new transfer.
      *
-     * @param tx_buffer The TX buffer with data to be transfered. If NULL is passed,
+     * @param tx_buffer The TX buffer with data to be transferred. If NULL is passed,
      *                  the default SPI value is sent.
      * @param tx_length The length of TX buffer in bytes.
      * @param rx_buffer The RX buffer which is used for received data. If NULL is passed,
@@ -262,8 +263,6 @@ protected:
      * @param event     The event mask of events to modify.
      */
     void start_transfer(const void *tx_buffer, int tx_length, void *rx_buffer, int rx_length, unsigned char bit_width, const event_callback_t &callback, int event);
-
-#if !defined(DOXYGEN_ONLY)
 
 private:
     /** Lock deep sleep only if it is not yet locked */
@@ -294,7 +293,6 @@ private:
 #endif //DEVICE_SPI_ASYNCH
 
 #if !defined(DOXYGEN_ONLY)
-
 protected:
     /* Internal SPI object identifying the resources */
     spi_t _spi;
