@@ -28,7 +28,7 @@
 #include "mbedtls/error.h"
 
 // This class requires Mbed TLS SSL/TLS client code
-#if defined(MBEDTLS_SSL_CLI_C)
+#if defined(MBEDTLS_SSL_CLI_C) || defined(DOXYGEN_ONLY)
 
 /**
  * \brief TLSSocket a wrapper around TCPSocket for interacting with TLS servers
@@ -45,27 +45,14 @@ public:
      */
     virtual ~TLSSocket();
 
-    /** Create a socket on a network interface
-     *
-     *  Creates and opens a socket on the network stack of the given
-     *  network interface.
-     *  If hostname is also given, user is not required to call set_hostname() later.
-     *
-     *  @param stack    Network stack as target for socket
-     *  @param hostname Hostname used for certificate verification
-     */
-    template <typename S>
-    TLSSocket(S *stack, const char *hostname = NULL) : TLSSocketWrapper(&tcp_socket, hostname)
-    {
-        nsapi_error_t ret = tcp_socket.open(stack);
-        MBED_ASSERT(ret == NSAPI_ERROR_OK);
-    }
-
     /** Opens a socket
      *
      *  Creates a network socket on the network stack of the given
      *  network interface. Not needed if stack is passed to the
      *  socket's constructor.
+     *
+     *  @note TLSSocket cannot be reopened after closing. It should be destructed to
+     *        clear internal TLS memory structures.
      *
      *  @param stack    Network stack as target for socket
      *  @return         0 on success, negative error code on failure
