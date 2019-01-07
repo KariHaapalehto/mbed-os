@@ -41,8 +41,8 @@ namespace ble {
  * same value.
  *
  * To get extra data from the advertising device, the scanner can send scan
- * requests to the advertiser that respond with a scan response. It is possible
- * to select what type of address is used to issue the scan request.
+ * requests to the advertiser; the advertiser may respond with scan responses.
+ * It is possible to select what type of address is used to issue the scan request.
  *
  * With Bluetooth 5, devices can advertise on more physical channels, and by
  * extension, they can scan on more physical channels. It is possible to define
@@ -121,7 +121,7 @@ public:
         scan_window_t scan_interval = scan_interval_t::min(),
         scan_interval_t scan_window = scan_window_t::min(),
         bool active_scanning = false,
-        own_address_type_t own_address_type = own_address_type_t::PUBLIC,
+        own_address_type_t own_address_type = own_address_type_t::RANDOM,
         scanning_filter_policy_t scanning_filter_policy = scanning_filter_policy_t::NO_FILTER
     ) :
         own_address_type(own_address_type),

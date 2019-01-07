@@ -63,7 +63,7 @@ struct AdvertisingReportEvent {
         advertising_sid_t SID,
         advertising_power_t txPower,
         rssi_t rssi,
-        periodic_interval_t periodicInterval,
+        uint16_t periodicInterval,
         const peer_address_type_t &directAddressType,
         const address_t &directAddress,
         const mbed::Span<const uint8_t> &advertisingData
@@ -133,10 +133,15 @@ struct AdvertisingReportEvent {
         return rssi;
     }
 
+    /** Indicate if periodic interval is valid */
+    bool isPeriodicIntervalPresent() const {
+        return periodicInterval != 0;
+    }
+
     /** Get interval. */
     periodic_interval_t getPeriodicInterval() const
     {
-        return periodicInterval;
+        return periodic_interval_t(periodicInterval);
     }
 
     /** Get target address type in directed advertising. */
@@ -152,7 +157,7 @@ struct AdvertisingReportEvent {
     }
 
     /** Get payload. */
-    const mbed::Span<const uint8_t> &getAdvertisingData() const
+    const mbed::Span<const uint8_t> &getPayload() const
     {
         return advertisingData;
     }
@@ -166,7 +171,7 @@ private:
     advertising_sid_t SID;
     advertising_power_t txPower;
     rssi_t rssi;
-    periodic_interval_t periodicInterval;
+    uint16_t periodicInterval;
     peer_address_type_t directAddressType;
     const address_t &directAddress;
     mbed::Span<const uint8_t> advertisingData;
@@ -630,10 +635,10 @@ private:
  *
  * @see ble::Gap::EventHandler::onDisconnectionComplete().
  */
-struct DisconnectionEvent {
+struct DisconnectionCompleteEvent {
 #if !defined(DOXYGEN_ONLY)
 
-    DisconnectionEvent(
+    DisconnectionCompleteEvent(
         connection_handle_t connectionHandle,
         const disconnection_reason_t &reason
     ) :
