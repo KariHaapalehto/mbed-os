@@ -121,6 +121,15 @@ def add_result_to_report(report, result):
     result_wrap = {0: result}
     report[target][toolchain][id_name].append(result_wrap)
 
+def get_toolchain_name(target, toolchain_name):
+    if toolchain_name == "ARM":
+        if CORE_ARCH[target.core] == 8:
+            return "ARMC6"
+        elif getattr(target, "default_toolchain", None) == "uARM":
+            return "uARM"
+
+    return toolchain_name
+
 def get_config(src_paths, target, toolchain_name=None, app_config=None):
     """Get the configuration object for a target-toolchain combination
 
@@ -316,8 +325,8 @@ def prepare_toolchain(src_paths, build_dir, target, toolchain_name,
         raise NotSupportedException(
             "Target {} is not supported by toolchain {}".format(
                 target.name, toolchain_name))
-    if (toolchain_name == "ARM" and CORE_ARCH[target.core] == 8):
-        toolchain_name = "ARMC6"
+
+    toolchain_name = get_toolchain_name(target, toolchain_name)
 
     try:
         cur_tc = TOOLCHAIN_CLASSES[toolchain_name]
@@ -402,13 +411,13 @@ def _fill_header(region_list, current_region):
     return header
 
 
-def merge_region_list(region_list, destination, notify, padding=b'\xFF'):
+def merge_region_list(region_list, destination, notify, config, padding=b'\xFF'):
     """Merge the region_list into a single image
 
     Positional Arguments:
     region_list - list of regions, which should contain filenames
     destination - file name to write all regions to
-    padding - bytes to fill gapps with
+    padding - bytes to fill gaps with
     """
     merged = IntelHex()
     _, format = splitext(destination)
@@ -426,6 +435,13 @@ def merge_region_list(region_list, destination, notify, padding=b'\xFF'):
             notify.info("  Filling region %s with %s" % (region.name, region.filename))
             part = intelhex_offset(region.filename, offset=region.start)
             part.start_addr = None
+            # Normally, we assume that part.maxddr() can be beyond
+            # end of rom. However, if the size is restricted with config, do check.
+            if config.target.restrict_size is not None:
+                part_size = (part.maxaddr() - part.minaddr()) + 1
+                if part_size > region.size:
+                    raise ToolException("Contents of region %s does not fit"
+                                  % region.name)
             merged.merge(part)
 
     # Hex file can have gaps, so no padding needed. While other formats may
@@ -546,13 +562,13 @@ def build_project(src_paths, build_path, target, toolchain_name,
                            for r in region_list]
             res = "%s.%s" % (join(build_path, name),
                              getattr(toolchain.target, "OUTPUT_EXT", "bin"))
-            merge_region_list(region_list, res, notify)
+            merge_region_list(region_list, res, notify, toolchain.config)
             update_regions = [
                 r for r in region_list if r.name in UPDATE_WHITELIST
             ]
             if update_regions:
                 update_res = join(build_path, generate_update_filename(name, toolchain.target))
-                merge_region_list(update_regions, update_res, notify)
+                merge_region_list(update_regions, update_res, notify, toolchain.config)
                 res = (res, update_res)
             else:
                 res = (res, None)
@@ -576,7 +592,6 @@ def build_project(src_paths, build_path, target, toolchain_name,
                         copy_when_different(join(build_path, art), into_dir)
 
         memap_instance = getattr(toolchain, 'memap_instance', None)
-        memap_table = ''
         if memap_instance:
             # Write output to stdout in text (pretty table) format
             memap_table = memap_instance.generate_output('table', stats_depth)
@@ -941,6 +956,8 @@ def build_mbed_libs(target, toolchain_name, clean=False, macros=None,
 
     Return - True if target + toolchain built correctly, False if not supported
     """
+
+    toolchain_name = get_toolchain_name(target, toolchain_name)
 
     if report is not None:
         start = time()

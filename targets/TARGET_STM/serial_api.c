@@ -463,6 +463,38 @@ void serial_format(serial_t *obj, int data_bits, SerialParity parity, int stop_b
     init_uart(obj);
 }
 
+const PinMap *serial_tx_pinmap()
+{
+    return PinMap_UART_TX;
+}
+
+const PinMap *serial_rx_pinmap()
+{
+    return PinMap_UART_RX;
+}
+
+const PinMap *serial_cts_pinmap()
+{
+#if !DEVICE_SERIAL_FC
+    static const PinMap PinMap_UART_CTS[] = {
+        {NC, NC, 0}
+    };
+#endif
+
+    return PinMap_UART_CTS;
+}
+
+const PinMap *serial_rts_pinmap()
+{
+#if !DEVICE_SERIAL_FC
+    static const PinMap PinMap_UART_RTS[] = {
+        {NC, NC, 0}
+    };
+#endif
+
+    return PinMap_UART_RTS;
+}
+
 /******************************************************************************
  * READ/WRITE
  ******************************************************************************/
@@ -668,7 +700,8 @@ int8_t get_uart_index(UARTName uart_name)
 .* Returns 1 if there is at least 1 serial instance with an on-going transfer
  * and 0 otherwise.
 */
-int serial_is_tx_ongoing(void) {
+int serial_is_tx_ongoing(void)
+{
     int TxOngoing = 0;
 
 #if defined(USART1_BASE)
@@ -766,7 +799,8 @@ int serial_is_tx_ongoing(void) {
 
 #else
 
-int serial_is_tx_ongoing(void) {
+int serial_is_tx_ongoing(void)
+{
     return 0;
 }
 

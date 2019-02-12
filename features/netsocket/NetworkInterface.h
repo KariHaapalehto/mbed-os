@@ -1,4 +1,4 @@
-/* NetworkStack
+/*
  * Copyright (c) 2015 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/** @file NetworkInterface.h Network Interface base class */
+/** @addtogroup netinterface
+ * Network Interface classes
+ * @{ */
+
 
 #ifndef NETWORK_INTERFACE_H
 #define NETWORK_INTERFACE_H
@@ -33,13 +39,11 @@ class EMACInterface;
 
 /** Common interface that is shared between network devices.
  *
- *  @\addtogroup netsocket
- *  @{
  */
 class NetworkInterface: public DNS {
 public:
 
-    virtual ~NetworkInterface() {};
+    virtual ~NetworkInterface();
 
     /** Return the default network interface.
      *
@@ -133,29 +137,39 @@ public:
      */
     virtual nsapi_error_t set_dhcp(bool dhcp);
 
-    /** Start the interface.
+    /** Connect to a network.
      *
-     *  This blocks until connection is established, but asynchronous operation can be enabled
-     *  by calling NetworkInterface::set_blocking(false).
+     * This blocks until connection is established, but asynchronous operation can be enabled
+     * by calling NetworkInterface::set_blocking(false).
      *
-     *  In asynchronous mode this starts the connection sequence and returns immediately.
-     *  Status of the connection can then checked from NetworkInterface::get_connection_status()
-     *  or from status callbacks.
+     * In asynchronous mode this starts the connection sequence and returns immediately.
+     * Status of the connection can then checked from NetworkInterface::get_connection_status()
+     * or from status callbacks.
      *
-     *  @return  NSAPI_ERROR_OK on success, or if asynchronous operation started.
-     *  @return  NSAPI_ERROR_ALREADY if asynchronous connect operation already ongoing.
-     *  @return  NSAPI_ERROR_IS_CONNECTED if interface is already connected.
-     *  @return  negative error code on failure.
+     * NetworkInterface internally handles reconnections until disconnect() is called.
+     *
+     * @return NSAPI_ERROR_OK if connection established in blocking mode.
+     * @return NSAPI_ERROR_OK if asynchronous operation started.
+     * @return NSAPI_ERROR_BUSY if asynchronous operation cannot be started.
+                                Implementation guarantees event generation, which can be used as an
+                                trigger to reissue the rejected request.
+     * @return NSAPI_ERROR_IS_CONNECTED if already connected.
+     * @return negative error code on failure.
      */
     virtual nsapi_error_t connect() = 0;
 
-    /** Stop the interface.
+    /** Disconnect from the network
      *
      *  This blocks until interface is disconnected, unless interface is set to
      *  asynchronous (non-blocking) mode by calling NetworkInterface::set_blocking(false).
      *
-     *  @return     NSAPI_ERROR_OK on success, or if asynchronous operation started.
-     @  @return     negative error code on failure.
+     * @return NSAPI_ERROR_OK on successfully disconnected in blocking mode.
+     * @return NSAPI_ERROR_OK if asynchronous operation started.
+     * @return NSAPI_ERROR_BUSY if asynchronous operation cannot be started.
+                                Implementation guarantees event generation, which can be used as an
+                                trigger to reissue the rejected request.
+     * @return NSAPI_ERROR_NO_CONNECTION if already disconnected.
+     * @return negative error code on failure.
      */
     virtual nsapi_error_t disconnect() = 0;
 
@@ -237,11 +251,37 @@ public:
      *
      *  The specified status callback function will be called on status changes
      *  on the network. The parameters on the callback are the event type and
-     *  event-type dependent reason parameter.
+     *  event-type dependent reason parameter. Only one callback can be registered at a time.
+     *
+     *  To unregister a callback call with status_cb parameter as a zero.
+     *
+     *  *NOTE:* Any callbacks registered with this function will be overwritten if
+     *          add_event_listener() API is used.
      *
      *  @param status_cb The callback for status changes.
      */
     virtual void attach(mbed::Callback<void(nsapi_event_t, intptr_t)> status_cb);
+
+    /** Add event listener for interface.
+     *
+     * This API allows multiple callback to be registered for a single interface.
+     * When first called, internal list of event handlers are created and registered to
+     * interface through attach() API.
+     *
+     * Application may only use attach() or add_event_listener() interface. Mixing usage
+     * of both leads to undefined behavior.
+     *
+     *  @param status_cb The callback for status changes.
+     */
+    void add_event_listener(mbed::Callback<void(nsapi_event_t, intptr_t)> status_cb);
+
+    /** Remove event listener from interface.
+     *
+     * Remove previously added callback from the handler list.
+     *
+     *  @param status_cb The callback to unregister.
+     */
+    void remove_event_listener(mbed::Callback<void(nsapi_event_t, intptr_t)> status_cb);
 
     /** Get the connection status.
      *
@@ -249,10 +289,15 @@ public:
      */
     virtual nsapi_connection_status_t get_connection_status() const;
 
-    /** Set blocking status of connect() which by default should be blocking.
+    /** Set asynchronous operation of connect() and disconnect() calls.
      *
-     *  @param blocking Use true to make connect() blocking.
-     *  @return         NSAPI_ERROR_OK on success, negative error code on failure.
+     * By default, interfaces are in synchronous mode which means that
+     * connect() or disconnect() blocks until it reach the target state or requested operation fails.
+     *
+     * @param blocking Use true to set NetworkInterface in asynchronous mode.
+     * @return NSAPI_ERROR_OK on success
+     * @return NSAPI_ERROR_UNSUPPORTED if driver does not support asynchronous mode.
+     * @return negative error code on failure.
      */
     virtual nsapi_error_t set_blocking(bool blocking);
 
@@ -344,7 +389,20 @@ protected:
      */
     static NetworkInterface *get_target_default_instance();
 #endif //!defined(DOXYGEN_ONLY)
+
+public:
+    /** Set default parameters on an interface.
+     *
+     * A network interface instantiated directly or using calls such as
+     * WiFiInterface::get_default_instance() is initially unconfigured.
+     * This call can be used to set the default parameters that would
+     * have been set if the interface had been requested using
+     * NetworkInterface::get_default_instance() (see nsapi JSON
+     * configuration).
+     */
+    virtual void set_default_parameters();
 };
 
-/** @}*/
 #endif
+
+/** @}*/

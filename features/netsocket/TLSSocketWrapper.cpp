@@ -171,7 +171,7 @@ nsapi_error_t TLSSocketWrapper::start_handshake(bool first_call)
                                      (const unsigned char *) DRBG_PERS,
                                      sizeof(DRBG_PERS))) != 0) {
         print_mbedtls_error("mbedtls_crt_drbg_init", ret);
-        return NSAPI_ERROR_PARAMETER;
+        return NSAPI_ERROR_AUTH_FAILURE;
     }
 
     mbedtls_ssl_conf_rng(get_ssl_config(), mbedtls_ctr_drbg_random, &_ctr_drbg);
@@ -186,7 +186,7 @@ nsapi_error_t TLSSocketWrapper::start_handshake(bool first_call)
     tr_debug("mbedtls_ssl_setup()");
     if ((ret = mbedtls_ssl_setup(&_ssl, get_ssl_config())) != 0) {
         print_mbedtls_error("mbedtls_ssl_setup", ret);
-        return NSAPI_ERROR_PARAMETER;
+        return NSAPI_ERROR_AUTH_FAILURE;
     }
 
     _transport->set_blocking(false);
@@ -287,7 +287,7 @@ nsapi_error_t TLSSocketWrapper::send(const void *data, nsapi_size_t size)
             ret = continue_handshake();
             if (ret != NSAPI_ERROR_IS_CONNECTED) {
                 if (ret == NSAPI_ERROR_ALREADY) {
-                    ret = NSAPI_ERROR_NO_CONNECTION;
+                    ret = NSAPI_ERROR_WOULD_BLOCK;
                 }
                 return ret;
             }
@@ -341,7 +341,7 @@ nsapi_size_or_error_t TLSSocketWrapper::recv(void *data, nsapi_size_t size)
             ret = continue_handshake();
             if (ret != NSAPI_ERROR_IS_CONNECTED) {
                 if (ret == NSAPI_ERROR_ALREADY) {
-                    ret = NSAPI_ERROR_NO_CONNECTION;
+                    ret = NSAPI_ERROR_WOULD_BLOCK;
                 }
                 return ret;
             }

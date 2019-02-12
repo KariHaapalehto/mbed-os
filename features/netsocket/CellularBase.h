@@ -13,13 +13,18 @@
  * limitations under the License.
  */
 
+/* @file CellularBase.h CellularBase */
+
+/** @addtogroup netinterface
+ * @{
+ */
+
 #ifndef CELLULAR_BASE_H
 #define CELLULAR_BASE_H
 
 #include "netsocket/NetworkInterface.h"
 
 /** Common interface that is shared between cellular interfaces.
- *  @addtogroup netsocket
  */
 class CellularBase: public NetworkInterface {
 
@@ -132,6 +137,18 @@ protected:
     static CellularBase *get_target_default_instance();
 
 #endif //!defined(DOXYGEN_ONLY)
+
+public:
+    /** Set default parameters on a cellular interface.
+     *
+     * A cellular interface instantiated directly or using
+     * CellularBase::get_default_instance() is initially unconfigured.
+     * This call can be used to set the default parameters that would
+     * have been set if the interface had been requested using
+     * NetworkInterface::get_default_instance() (see nsapi JSON
+     * configuration).
+     */
+    virtual void set_default_parameters();
 };
 
 #endif //CELLULAR_BASE_H

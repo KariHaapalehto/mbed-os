@@ -31,11 +31,6 @@ UBLOX_AT_CellularNetwork::~UBLOX_AT_CellularNetwork()
     }
 }
 
-AT_CellularNetwork::RegistrationMode UBLOX_AT_CellularNetwork::has_registration(RegistrationType reg_type)
-{
-    return (reg_type == C_REG || reg_type == C_GREG) ? RegistrationModeLAC : RegistrationModeDisable;
-}
-
 nsapi_error_t UBLOX_AT_CellularNetwork::set_access_technology_impl(RadioAccessTechnology opRat)
 {
     switch (opRat) {
@@ -54,10 +49,10 @@ nsapi_error_t UBLOX_AT_CellularNetwork::set_access_technology_impl(RadioAccessTe
             break;
         case RAT_HSDPA_HSUPA:
             break;
-#elif defined(TARGET_UBLOX_C030_R410M)
+#elif defined(TARGET_UBLOX_C030_R41XM)
         case RAT_CATM1:
             break;
-#elif defined(TARGET_UBLOX_C030_R410M) || defined(TARGET_UBLOX_C030_N211)
+#elif defined(TARGET_UBLOX_C030_R41XM) || defined(TARGET_UBLOX_C030_N211)
         case RAT_NB1:
             break;
 #endif
