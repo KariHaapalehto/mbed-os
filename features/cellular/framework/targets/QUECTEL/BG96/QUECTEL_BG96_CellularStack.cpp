@@ -255,10 +255,6 @@ nsapi_size_or_error_t QUECTEL_BG96_CellularStack::socket_sendto_impl(CellularSoc
         return NSAPI_ERROR_PARAMETER;
     }
 
-    if (!size && socket->proto == NSAPI_UDP) {
-        return NSAPI_ERROR_UNSUPPORTED;
-    }
-
     int sent_len = 0;
     int sent_len_before = 0;
     int sent_len_after = 0;
@@ -329,7 +325,7 @@ nsapi_size_or_error_t QUECTEL_BG96_CellularStack::socket_recvfrom_impl(CellularS
     port = _at.read_int();
     if (recv_len > 0) {
         // do not read more than buffer size
-        recv_len = recv_len > size ? size : recv_len;
+        recv_len = recv_len > (nsapi_size_or_error_t)size ? size : recv_len;
         _at.read_bytes((uint8_t *)buffer, recv_len);
     }
     _at.resp_stop();

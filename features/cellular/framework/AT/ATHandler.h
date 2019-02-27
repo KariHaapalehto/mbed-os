@@ -190,10 +190,6 @@ public:
      */
     void process_oob();
 
-    /** Set sigio for the current file handle. Sigio event goes through eventqueue so that it's handled in current thread.
-     */
-    void set_filehandle_sigio();
-
     /** Set file handle, which is used for reading AT responses and writing AT commands
      *
      *  @param fh file handle used for reading AT responses and writing AT commands
@@ -430,6 +426,13 @@ public: // just for debugging
      *  @param debug_on Enable/disable debugging
      */
     void set_debug(bool debug_on);
+
+    /**
+     * Get degug state set by @ref set_debug
+     *
+     *  @return current state of debug
+     */
+    bool get_debug() const;
 
     /** Set debug_on for all ATHandlers in the _atHandlers list
      *

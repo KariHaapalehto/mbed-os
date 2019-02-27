@@ -156,7 +156,7 @@ def get_config(src_paths, target, toolchain_name=None, app_config=None):
 
     cfg, macros = config.get_config_data()
     features = config.get_features()
-    return cfg, macros, features
+    return cfg, macros, features, res
 
 def is_official_target(target_name, version):
     """ Returns True, None if a target is part of the official release for the
@@ -193,7 +193,7 @@ def is_official_target(target_name, version):
         elif version == '5':
             # For version 5, ARM, GCC_ARM, and IAR toolchain support is required
             required_toolchains = [
-                set(['ARM', 'GCC_ARM', 'IAR']),
+                set(['ARM', 'GCC_ARM']),
                 set(['ARMC6'])
             ]
             supported_toolchains = set(target.supported_toolchains)
@@ -398,8 +398,9 @@ def _fill_header(region_list, current_region):
             else:
                 ih = intelhex_offset(region_dict[data].filename, offset=region_dict[data].start)
             if subtype.startswith("CRCITT32"):
-                fmt = {"CRCITT32be": ">l", "CRCITT32le": "<l"}[subtype]
-                header.puts(start, struct.pack(fmt, zlib.crc32(ih.tobinarray())))
+                fmt = {"CRCITT32be": ">L", "CRCITT32le": "<L"}[subtype]
+                crc_val = zlib.crc32(ih.tobinarray()) & 0xffffffff
+                header.puts(start, struct.pack(fmt, crc_val))
             elif subtype.startswith("SHA"):
                 if subtype == "SHA256":
                     hash = hashlib.sha256()
@@ -422,6 +423,10 @@ def merge_region_list(region_list, destination, notify, config, padding=b'\xFF')
     merged = IntelHex()
     _, format = splitext(destination)
     notify.info("Merging Regions")
+    # Merged file list: Keep track of binary/hex files that we have already
+    # merged. e.g In some cases, bootloader may be split into multiple parts, but
+    # all internally referring to the same bootloader file.
+    merged_list = []
 
     for region in region_list:
         if region.active and not region.filename:
@@ -431,7 +436,7 @@ def merge_region_list(region_list, destination, notify, config, padding=b'\xFF')
             header_filename = header_basename + "_header.hex"
             _fill_header(region_list, region).tofile(header_filename, format='hex')
             region = region._replace(filename=header_filename)
-        if region.filename:
+        if region.filename and (region.filename not in merged_list):
             notify.info("  Filling region %s with %s" % (region.name, region.filename))
             part = intelhex_offset(region.filename, offset=region.start)
             part.start_addr = None
@@ -442,7 +447,10 @@ def merge_region_list(region_list, destination, notify, config, padding=b'\xFF')
                 if part_size > region.size:
                     raise ToolException("Contents of region %s does not fit"
                                   % region.name)
+            merged_list.append(region.filename)
             merged.merge(part)
+        elif region.filename in merged_list:
+            notify.info("  Skipping %s as it is merged previously" % (region.name))
 
     # Hex file can have gaps, so no padding needed. While other formats may
     # need padding. Iterate through segments and pad the gaps.

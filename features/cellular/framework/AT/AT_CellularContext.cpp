@@ -112,6 +112,8 @@ nsapi_error_t AT_CellularContext::connect()
     if (_is_connected) {
         return NSAPI_ERROR_IS_CONNECTED;
     }
+    call_network_cb(NSAPI_STATUS_CONNECTING);
+
     nsapi_error_t err = _device->attach_to_network();
     _cb_data.error = check_operation(err, OP_CONNECT);
 
@@ -128,6 +130,10 @@ nsapi_error_t AT_CellularContext::connect()
             }
             return NSAPI_ERROR_OK;
         }
+    }
+
+    if (_cb_data.error == NSAPI_ERROR_ALREADY) {
+        return NSAPI_ERROR_OK;
     }
 
     return _cb_data.error;
@@ -315,8 +321,15 @@ nsapi_error_t AT_CellularContext::do_user_authentication()
         _at.cmd_start("AT+CGAUTH=");
         _at.write_int(_cid);
         _at.write_int(_authentication_type);
+
+        const bool stored_debug_state = _at.get_debug();
+        _at.set_debug(false);
+
         _at.write_string(_uname);
         _at.write_string(_pwd);
+
+        _at.set_debug(stored_debug_state);
+
         _at.cmd_stop_read_resp();
         if (_at.get_last_error() != NSAPI_ERROR_OK) {
             return NSAPI_ERROR_AUTH_FAILURE;
@@ -415,7 +428,7 @@ bool AT_CellularContext::set_new_context(int cid)
         strncpy(pdp_type_str, "IPV6", sizeof(pdp_type_str));
         pdp_type = IPV6_PDP_TYPE;
     } else if (modem_supports_ipv4) {
-        strncpy(pdp_type_str, "IP", sizeof(pdp_type));
+        strncpy(pdp_type_str, "IP", sizeof(pdp_type_str));
         pdp_type = IPV4_PDP_TYPE;
     } else {
         return false;
@@ -447,7 +460,7 @@ nsapi_error_t AT_CellularContext::do_activate_context()
     }
 
     // In IP case but also when Non-IP is requested and
-    // control plane optimisation is not established -> activate ip context
+    // control plane optimization is not established -> activate ip context
     _nonip_req = false;
     return activate_ip_context();
 }
@@ -536,8 +549,6 @@ nsapi_error_t AT_CellularContext::activate_context()
 
 void AT_CellularContext::do_connect()
 {
-    call_network_cb(NSAPI_STATUS_CONNECTING);
-
     if (!_is_context_active) {
         _cb_data.error = do_activate_context();
 #if !NSAPI_PPP_AVAILABLE
@@ -670,10 +681,11 @@ nsapi_error_t AT_CellularContext::disconnect()
         } else {
             deactivate_ip_context();
         }
+    } else {
+        call_network_cb(NSAPI_STATUS_DISCONNECTED);
     }
 
     _is_connected = false;
-    call_network_cb(NSAPI_STATUS_DISCONNECTED);
 
     return _at.unlock_return_error();
 }
@@ -729,11 +741,6 @@ void AT_CellularContext::deactivate_context()
         _at.write_int(_cid);
         _at.cmd_stop_read_resp();
     }
-
-    _at.clear_error();
-    _at.cmd_start("AT+CGATT=0");
-    _at.cmd_stop_read_resp();
-    _at.restore_at_timeout();
 }
 
 nsapi_error_t AT_CellularContext::get_apn_backoff_timer(int &backoff_timer)

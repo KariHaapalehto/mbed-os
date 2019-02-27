@@ -573,7 +573,7 @@ class mbedToolchain:
 
     def compile_output(self, output=[]):
         _rc = output[0]
-        _stderr = output[1].decode("utf-8")
+        _stderr = output[1]
         command = output[2]
 
         # Parse output for Warnings and Errors
@@ -742,6 +742,7 @@ class mbedToolchain:
         if self.config.has_regions:
             try:
                 regions = list(self.config.regions)
+                regions.sort(key=lambda x:x.start)
                 self.notify.info("Using ROM region%s %s in this build." % (
                     "s" if len(regions) > 1 else "",
                     ", ".join(r.name for r in regions)

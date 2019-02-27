@@ -20,6 +20,13 @@
 #include "psa/internal_trusted_storage.h"
 #include "psa/service.h"
 
+#if defined(TARGET_TFM)
+#define SPM_PANIC(format, ...) \
+{ \
+    while(1){}; \
+}
+#endif
+
 typedef psa_status_t (*SignalHandler)(psa_msg_t *);
 
 static psa_status_t lifecycle_get(psa_msg_t *msg)
@@ -30,7 +37,7 @@ static psa_status_t lifecycle_get(psa_msg_t *msg)
         return PSA_DROP_CONNECTION;
     }
 
-    psa_its_status_t status = psa_platfrom_lifecycle_get_impl(&lc_state);
+    psa_status_t status = psa_platfrom_lifecycle_get_impl(&lc_state);
     if (status == PSA_SUCCESS) {
         psa_write(msg->handle, 0, &lc_state, sizeof(lc_state));
     }
@@ -50,6 +57,12 @@ static psa_status_t lifecycle_change_request(psa_msg_t *msg)
     }
     return psa_platfrom_lifecycle_change_request_impl(lc_state);
 
+}
+
+static psa_status_t system_reset_request(psa_msg_t *msg)
+{
+    (void)msg;
+    psa_system_reset_impl();
 }
 
 static void message_handler(psa_msg_t *msg, SignalHandler handler)
@@ -77,7 +90,12 @@ void platform_partition_entry(void *ptr)
     uint32_t signals = 0;
     psa_msg_t msg = {0};
     while (1) {
+#if defined(TARGET_MBED_SPM)
         signals = psa_wait_any(PSA_BLOCK);
+#else
+        signals = psa_wait(PLATFORM_WAIT_ANY_SID_MSK, PSA_BLOCK);
+#endif
+
         if ((signals & PSA_PLATFORM_LC_GET_MSK) != 0) {
             psa_get(PSA_PLATFORM_LC_GET_MSK, &msg);
             message_handler(&msg, lifecycle_get);
@@ -85,6 +103,10 @@ void platform_partition_entry(void *ptr)
         if ((signals & PSA_PLATFORM_LC_SET_MSK) != 0) {
             psa_get(PSA_PLATFORM_LC_SET_MSK, &msg);
             message_handler(&msg, lifecycle_change_request);
+        }
+        if ((signals & PSA_PLATFORM_SYSTEM_RESET_MSK) != 0) {
+            psa_get(PSA_PLATFORM_SYSTEM_RESET_MSK, &msg);
+            message_handler(&msg, system_reset_request);
         }
     }
 }

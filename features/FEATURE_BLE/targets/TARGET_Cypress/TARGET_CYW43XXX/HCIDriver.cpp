@@ -34,7 +34,13 @@ static const uint8_t pre_brcm_patchram_buf[] = {
     0x03, 0x0C, 0x00,
     0x2E, 0xFC, 0x00,
 };
+static const uint8_t post_brcm_patchram_buf[] = {
+    // RESET cmd
+    0x03, 0x0C, 0x00,
+};
+
 static const int pre_brcm_patch_ram_length = sizeof(pre_brcm_patchram_buf);
+static const int post_brcm_patch_ram_length = sizeof(post_brcm_patchram_buf);
 
 #define HCI_RESET_RAND_CNT        4
 #define HCI_VS_CMD_SET_SLEEP_MODE 0xFC27
@@ -75,11 +81,10 @@ public:
 
     virtual void do_initialize()
     {
-
-        Cy_GPIO_Clr(BT_DEVICE_WAKE_PORT, BT_DEVICE_WAKE_PIN);
+        bt_device_wake = 0;
         wait_ms(500);
 
-        Cy_GPIO_Set(BT_POWER_PORT, BT_POWER_PIN);
+        bt_power = 1;
         wait_ms(500);
     }
 
@@ -279,9 +284,21 @@ private:
     {
         service_pack_ptr = brcm_patchram_buf;
         service_pack_length = brcm_patch_ram_length;
-        service_pack_next = &HCIDriver::terminate_service_pack_transfert;
+        service_pack_next = &HCIDriver::post_service_pack_transfert;
         service_pack_index = 0;
         service_pack_transfered = false;
+        send_service_pack_command();
+    }
+
+    // Called once brcm_patchram_buf has been transferred; send post_brcm_patchram_buf
+    void post_service_pack_transfert(void)
+    {
+        service_pack_ptr = post_brcm_patchram_buf;
+        service_pack_length = post_brcm_patch_ram_length;
+        service_pack_next = &HCIDriver::terminate_service_pack_transfert;;
+        service_pack_index = 0;
+        service_pack_transfered = false;
+        wait_ms(1000);
         send_service_pack_command();
     }
 
@@ -293,7 +310,6 @@ private:
         service_pack_next = NULL;
         service_pack_index = 0;
         service_pack_transfered = true;
-        wait_ms(1000);
         set_sleep_mode();
     }
 

@@ -26,22 +26,8 @@
 #endif
 
 #if defined(MBEDTLS_PSA_CRYPTO_C)
-/*
- * When MBEDTLS_PSA_CRYPTO_SPM is defined, the code is being built for SPM
- * (Secure Partition Manager) integration which separates the code into two
- * parts: NSPE (Non-Secure Processing Environment) and SPE (Secure Processing
- * Environment). When building for the SPE, an additional header file should be
- * included.
- */
-#if defined(MBEDTLS_PSA_CRYPTO_SPM)
-/*
- * PSA_CRYPTO_SECURE means that this file is compiled for the SPE.
- * Some headers will be affected by this flag.
- */
-#define PSA_CRYPTO_SECURE 1
-#include "crypto_spe.h"
-#endif
 
+#include "psa_crypto_service_integration.h"
 #include "psa/crypto.h"
 
 #include "psa_crypto_core.h"
@@ -172,13 +158,21 @@ static psa_status_t mbedtls_to_psa_error( int ret )
         case MBEDTLS_ERR_ASN1_BUF_TOO_SMALL:
             return( PSA_ERROR_BUFFER_TOO_SMALL );
 
+#if defined(MBEDTLS_ERR_BLOWFISH_BAD_INPUT_DATA)
+        case MBEDTLS_ERR_BLOWFISH_BAD_INPUT_DATA:
+#elif defined(MBEDTLS_ERR_BLOWFISH_INVALID_KEY_LENGTH)
         case MBEDTLS_ERR_BLOWFISH_INVALID_KEY_LENGTH:
+#endif
         case MBEDTLS_ERR_BLOWFISH_INVALID_INPUT_LENGTH:
             return( PSA_ERROR_NOT_SUPPORTED );
         case MBEDTLS_ERR_BLOWFISH_HW_ACCEL_FAILED:
             return( PSA_ERROR_HARDWARE_FAILURE );
 
+#if defined(MBEDTLS_ERR_CAMELLIA_BAD_INPUT_DATA)
+        case MBEDTLS_ERR_CAMELLIA_BAD_INPUT_DATA:
+#elif defined(MBEDTLS_ERR_CAMELLIA_INVALID_KEY_LENGTH)
         case MBEDTLS_ERR_CAMELLIA_INVALID_KEY_LENGTH:
+#endif
         case MBEDTLS_ERR_CAMELLIA_INVALID_INPUT_LENGTH:
             return( PSA_ERROR_NOT_SUPPORTED );
         case MBEDTLS_ERR_CAMELLIA_HW_ACCEL_FAILED:
@@ -346,7 +340,7 @@ static psa_status_t mbedtls_to_psa_error( int ret )
             return( PSA_ERROR_HARDWARE_FAILURE );
 
         default:
-            return( PSA_ERROR_UNKNOWN_ERROR );
+            return( PSA_ERROR_GENERIC_ERROR );
     }
 }
 
@@ -742,10 +736,36 @@ static psa_status_t psa_get_empty_key_slot( psa_key_handle_t handle,
         return( status );
 
     if( slot->type != PSA_KEY_TYPE_NONE )
-        return( PSA_ERROR_OCCUPIED_SLOT );
+        return( PSA_ERROR_ALREADY_EXISTS );
 
     *p_slot = slot;
     return( status );
+}
+
+/** Calculate the intersection of two algorithm usage policies.
+ *
+ * Return 0 (which allows no operation) on incompatibility.
+ */
+static psa_algorithm_t psa_key_policy_algorithm_intersection(
+    psa_algorithm_t alg1,
+    psa_algorithm_t alg2 )
+{
+    /* Common case: the policy only allows alg. */
+    if( alg1 == alg2 )
+        return( alg1 );
+    /* If the policies are from the same hash-and-sign family, check
+     * if one is a wildcard. If so the other has the specific algorithm. */
+    if( PSA_ALG_IS_HASH_AND_SIGN( alg1 ) &&
+        PSA_ALG_IS_HASH_AND_SIGN( alg2 ) &&
+        ( alg1 & ~PSA_ALG_HASH_MASK ) == ( alg2 & ~PSA_ALG_HASH_MASK ) )
+    {
+        if( PSA_ALG_SIGN_GET_HASH( alg1 ) == PSA_ALG_ANY_HASH )
+            return( alg2 );
+        if( PSA_ALG_SIGN_GET_HASH( alg2 ) == PSA_ALG_ANY_HASH )
+            return( alg1 );
+    }
+    /* If the policies are incompatible, allow nothing. */
+    return( 0 );
 }
 
 /** Test whether a policy permits an algorithm.
@@ -771,6 +791,31 @@ static int psa_key_policy_permits( const psa_key_policy_t *policy,
     return( 0 );
 }
 
+/** Restrict a key policy based on a constraint.
+ *
+ * \param[in,out] policy    The policy to restrict.
+ * \param[in] constraint    The policy constraint to apply.
+ *
+ * \retval #PSA_SUCCESS
+ *         \c *policy contains the intersection of the original value of
+ *         \c *policy and \c *constraint.
+ * \retval #PSA_ERROR_INVALID_ARGUMENT
+ *         \c *policy and \c *constraint are incompatible.
+ *         \c *policy is unchanged.
+ */
+static psa_status_t psa_restrict_key_policy(
+    psa_key_policy_t *policy,
+    const psa_key_policy_t *constraint )
+{
+    psa_algorithm_t intersection_alg =
+        psa_key_policy_algorithm_intersection( policy->alg, constraint->alg );
+    if( intersection_alg == 0 && policy->alg != 0 && constraint->alg != 0 )
+        return( PSA_ERROR_INVALID_ARGUMENT );
+    policy->usage &= constraint->usage;
+    policy->alg = intersection_alg;
+    return( PSA_SUCCESS );
+}
+
 /** Retrieve a slot which must contain a key. The key must have allow all the
  * usage flags set in \p usage. If \p alg is nonzero, the key must allow
  * operations with this algorithm. */
@@ -788,7 +833,7 @@ static psa_status_t psa_get_key_from_slot( psa_key_handle_t handle,
     if( status != PSA_SUCCESS )
         return( status );
     if( slot->type == PSA_KEY_TYPE_NONE )
-        return( PSA_ERROR_EMPTY_SLOT );
+        return( PSA_ERROR_DOES_NOT_EXIST );
 
     /* Enforce that usage policy for the key slot contains all the flags
      * required by the usage parameter. There is one exception: public
@@ -950,7 +995,7 @@ psa_status_t psa_get_key_information( psa_key_handle_t handle,
         return( status );
 
     if( slot->type == PSA_KEY_TYPE_NONE )
-        return( PSA_ERROR_EMPTY_SLOT );
+        return( PSA_ERROR_DOES_NOT_EXIST );
     if( type != NULL )
         *type = slot->type;
     if( bits != NULL )
@@ -974,11 +1019,11 @@ static int pk_write_pubkey_simple( mbedtls_pk_context *key,
 }
 #endif /* defined(MBEDTLS_RSA_C) || defined(MBEDTLS_ECP_C) */
 
-static  psa_status_t psa_internal_export_key( psa_key_slot_t *slot,
-                                              uint8_t *data,
-                                              size_t data_size,
-                                              size_t *data_length,
-                                              int export_public_key )
+static psa_status_t psa_internal_export_key( const psa_key_slot_t *slot,
+                                             uint8_t *data,
+                                             size_t data_size,
+                                             size_t *data_length,
+                                             int export_public_key )
 {
     *data_length = 0;
 
@@ -1165,6 +1210,65 @@ exit:
 }
 #endif /* defined(MBEDTLS_PSA_CRYPTO_STORAGE_C) */
 
+static psa_status_t psa_copy_key_material( const psa_key_slot_t *source,
+                                           psa_key_handle_t target )
+{
+    psa_status_t status;
+    uint8_t *buffer = NULL;
+    size_t buffer_size = 0;
+    size_t length;
+
+    buffer_size = PSA_KEY_EXPORT_MAX_SIZE( source->type,
+                                           psa_get_key_bits( source ) );
+    buffer = mbedtls_calloc( 1, buffer_size );
+    if( buffer == NULL && buffer_size != 0 )
+        return( PSA_ERROR_INSUFFICIENT_MEMORY );
+    status = psa_internal_export_key( source, buffer, buffer_size, &length, 0 );
+    if( status != PSA_SUCCESS )
+        goto exit;
+    status = psa_import_key( target, source->type, buffer, length );
+
+exit:
+    if( buffer_size != 0 )
+        mbedtls_platform_zeroize( buffer, buffer_size );
+    mbedtls_free( buffer );
+    return( status );
+}
+
+psa_status_t psa_copy_key(psa_key_handle_t source_handle,
+                          psa_key_handle_t target_handle,
+                          const psa_key_policy_t *constraint)
+{
+    psa_key_slot_t *source_slot = NULL;
+    psa_key_slot_t *target_slot = NULL;
+    psa_key_policy_t new_policy;
+    psa_status_t status;
+    status = psa_get_key_from_slot( source_handle, &source_slot, 0, 0 );
+    if( status != PSA_SUCCESS )
+        return( status );
+    status = psa_get_empty_key_slot( target_handle, &target_slot );
+    if( status != PSA_SUCCESS )
+        return( status );
+
+    new_policy = target_slot->policy;
+    status = psa_restrict_key_policy( &new_policy, &source_slot->policy );
+    if( status != PSA_SUCCESS )
+        return( status );
+    if( constraint != NULL )
+    {
+        status = psa_restrict_key_policy( &new_policy, constraint );
+        if( status != PSA_SUCCESS )
+            return( status );
+    }
+
+    status = psa_copy_key_material( source_slot, target_handle );
+    if( status != PSA_SUCCESS )
+        return( status );
+
+    target_slot->policy = new_policy;
+    return( PSA_SUCCESS );
+}
+
 
 
 /****************************************************************/
@@ -1269,7 +1373,13 @@ psa_status_t psa_hash_setup( psa_hash_operation_t *operation,
                              psa_algorithm_t alg )
 {
     int ret;
-    operation->alg = 0;
+
+    /* A context must be freshly initialized before it can be set up. */
+    if( operation->alg != 0 )
+    {
+        return( PSA_ERROR_BAD_STATE );
+    }
+
     switch( alg )
     {
 #if defined(MBEDTLS_MD2_C)
@@ -1392,8 +1502,7 @@ psa_status_t psa_hash_update( psa_hash_operation_t *operation,
             break;
 #endif
         default:
-            ret = MBEDTLS_ERR_MD_BAD_INPUT_DATA;
-            break;
+            return( PSA_ERROR_BAD_STATE );
     }
 
     if( ret != 0 )
@@ -1465,8 +1574,7 @@ psa_status_t psa_hash_finish( psa_hash_operation_t *operation,
             break;
 #endif
         default:
-            ret = MBEDTLS_ERR_MD_BAD_INPUT_DATA;
-            break;
+            return( PSA_ERROR_BAD_STATE );
     }
     status = mbedtls_to_psa_error( ret );
 
@@ -1890,6 +1998,12 @@ static psa_status_t psa_mac_setup( psa_mac_operation_t *operation,
     unsigned char truncated = PSA_MAC_TRUNCATED_LENGTH( alg );
     psa_algorithm_t full_length_alg = PSA_ALG_FULL_LENGTH_MAC( alg );
 
+    /* A context must be freshly initialized before it can be set up. */
+    if( operation->alg != 0 )
+    {
+        return( PSA_ERROR_BAD_STATE );
+    }
+
     status = psa_mac_init( operation, full_length_alg );
     if( status != PSA_SUCCESS )
         return( status );
@@ -2008,9 +2122,9 @@ psa_status_t psa_mac_update( psa_mac_operation_t *operation,
 {
     psa_status_t status = PSA_ERROR_BAD_STATE;
     if( ! operation->key_set )
-        goto cleanup;
+        return( PSA_ERROR_BAD_STATE );
     if( operation->iv_required && ! operation->iv_set )
-        goto cleanup;
+        return( PSA_ERROR_BAD_STATE );
     operation->has_input = 1;
 
 #if defined(MBEDTLS_CMAC_C)
@@ -2033,10 +2147,9 @@ psa_status_t psa_mac_update( psa_mac_operation_t *operation,
     {
         /* This shouldn't happen if `operation` was initialized by
          * a setup function. */
-        status = PSA_ERROR_BAD_STATE;
+        return( PSA_ERROR_BAD_STATE );
     }
 
-cleanup:
     if( status != PSA_SUCCESS )
         psa_mac_abort( operation );
     return( status );
@@ -2128,6 +2241,11 @@ psa_status_t psa_mac_sign_finish( psa_mac_operation_t *operation,
 {
     psa_status_t status;
 
+    if( operation->alg == 0 )
+    {
+        return( PSA_ERROR_BAD_STATE );
+    }
+
     /* Fill the output buffer with something that isn't a valid mac
      * (barring an attack on the mac and deliberately-crafted input),
      * in case the caller doesn't check the return status properly. */
@@ -2139,13 +2257,11 @@ psa_status_t psa_mac_sign_finish( psa_mac_operation_t *operation,
 
     if( ! operation->is_sign )
     {
-        status = PSA_ERROR_BAD_STATE;
-        goto cleanup;
+        return( PSA_ERROR_BAD_STATE );
     }
 
     status = psa_mac_finish_internal( operation, mac, mac_size );
 
-cleanup:
     if( status == PSA_SUCCESS )
     {
         status = psa_mac_abort( operation );
@@ -2166,10 +2282,14 @@ psa_status_t psa_mac_verify_finish( psa_mac_operation_t *operation,
     uint8_t actual_mac[PSA_MAC_MAX_SIZE];
     psa_status_t status;
 
+    if( operation->alg == 0 )
+    {
+        return( PSA_ERROR_BAD_STATE );
+    }
+
     if( operation->is_sign )
     {
-        status = PSA_ERROR_BAD_STATE;
-        goto cleanup;
+        return( PSA_ERROR_BAD_STATE );
     }
     if( operation->mac_size != mac_length )
     {
@@ -2791,6 +2911,12 @@ static psa_status_t psa_cipher_setup( psa_cipher_operation_t *operation,
                               PSA_KEY_USAGE_ENCRYPT :
                               PSA_KEY_USAGE_DECRYPT );
 
+    /* A context must be freshly initialized before it can be set up. */
+    if( operation->alg != 0 )
+    {
+        return( PSA_ERROR_BAD_STATE );
+    }
+
     status = psa_cipher_init( operation, alg );
     if( status != PSA_SUCCESS )
         return( status );
@@ -2892,8 +3018,7 @@ psa_status_t psa_cipher_generate_iv( psa_cipher_operation_t *operation,
     int ret;
     if( operation->iv_set || ! operation->iv_required )
     {
-        status = PSA_ERROR_BAD_STATE;
-        goto exit;
+        return( PSA_ERROR_BAD_STATE );
     }
     if( iv_size < operation->iv_size )
     {
@@ -2925,8 +3050,7 @@ psa_status_t psa_cipher_set_iv( psa_cipher_operation_t *operation,
     int ret;
     if( operation->iv_set || ! operation->iv_required )
     {
-        status = PSA_ERROR_BAD_STATE;
-        goto exit;
+        return( PSA_ERROR_BAD_STATE );
     }
     if( iv_length != operation->iv_size )
     {
@@ -2953,6 +3077,12 @@ psa_status_t psa_cipher_update( psa_cipher_operation_t *operation,
     psa_status_t status;
     int ret;
     size_t expected_output_size;
+
+    if( operation->alg == 0 )
+    {
+        return( PSA_ERROR_BAD_STATE );
+    }
+
     if( ! PSA_ALG_IS_STREAM_CIPHER( operation->alg ) )
     {
         /* Take the unprocessed partial block left over from previous
@@ -2988,19 +3118,17 @@ psa_status_t psa_cipher_finish( psa_cipher_operation_t *operation,
                                 size_t output_size,
                                 size_t *output_length )
 {
-    psa_status_t status = PSA_ERROR_UNKNOWN_ERROR;
+    psa_status_t status = PSA_ERROR_GENERIC_ERROR;
     int cipher_ret = MBEDTLS_ERR_CIPHER_FEATURE_UNAVAILABLE;
     uint8_t temp_output_buffer[MBEDTLS_MAX_BLOCK_LENGTH];
 
     if( ! operation->key_set )
     {
-        status = PSA_ERROR_BAD_STATE;
-        goto error;
+        return( PSA_ERROR_BAD_STATE );
     }
     if( operation->iv_required && ! operation->iv_set )
     {
-        status = PSA_ERROR_BAD_STATE;
-        goto error;
+        return( PSA_ERROR_BAD_STATE );
     }
 
     if( operation->ctx.cipher.operation == MBEDTLS_ENCRYPT &&
@@ -3511,6 +3639,12 @@ psa_status_t psa_generator_abort( psa_crypto_generator_t *generator )
 psa_status_t psa_get_generator_capacity(const psa_crypto_generator_t *generator,
                                         size_t *capacity)
 {
+    if( generator->alg == 0 )
+    {
+        /* This is a blank generator. */
+        return PSA_ERROR_BAD_STATE;
+    }
+
     *capacity = generator->capacity;
     return( PSA_SUCCESS );
 }
@@ -3740,24 +3874,29 @@ psa_status_t psa_generator_read( psa_crypto_generator_t *generator,
 {
     psa_status_t status;
 
+    if( generator->alg == 0 )
+    {
+        /* This is a blank generator. */
+        return PSA_ERROR_BAD_STATE;
+    }
+
     if( output_length > generator->capacity )
     {
         generator->capacity = 0;
         /* Go through the error path to wipe all confidential data now
          * that the generator object is useless. */
-        status = PSA_ERROR_INSUFFICIENT_CAPACITY;
+        status = PSA_ERROR_INSUFFICIENT_DATA;
         goto exit;
     }
-    if( output_length == 0 &&
-        generator->capacity == 0 && generator->alg == 0 )
+    if( output_length == 0 && generator->capacity == 0 )
     {
-        /* Edge case: this is a blank or finished generator, and 0
-         * bytes were requested. The right error in this case could
+        /* Edge case: this is a finished generator, and 0 bytes
+         * were requested. The right error in this case could
          * be either INSUFFICIENT_CAPACITY or BAD_STATE. Return
          * INSUFFICIENT_CAPACITY, which is right for a finished
          * generator, for consistency with the case when
          * output_length > 0. */
-        return( PSA_ERROR_INSUFFICIENT_CAPACITY );
+        return( PSA_ERROR_INSUFFICIENT_DATA );
     }
     generator->capacity -= output_length;
 
@@ -3801,7 +3940,13 @@ psa_status_t psa_generator_read( psa_crypto_generator_t *generator,
 exit:
     if( status != PSA_SUCCESS )
     {
+        /* Preserve the algorithm upon errors, but clear all sensitive state.
+         * This allows us to differentiate between exhausted generators and
+         * blank generators, so we can return PSA_ERROR_BAD_STATE on blank
+         * generators. */
+        psa_algorithm_t alg = generator->alg;
         psa_generator_abort( generator );
+        generator->alg = alg;
         memset( output, '!', output_length );
     }
     return( status );
@@ -4281,45 +4426,11 @@ psa_status_t psa_generate_random( uint8_t *output,
 
 #if ( defined(MBEDTLS_ENTROPY_NV_SEED) && defined(MBEDTLS_PSA_HAS_ITS_IO) )
 
-/* Support function for error conversion between psa_its error codes to psa crypto */
-static psa_status_t its_to_psa_error( psa_its_status_t ret )
-{
-    switch( ret )
-    {
-        case PSA_ITS_SUCCESS:
-            return( PSA_SUCCESS );
-
-        case PSA_ITS_ERROR_UID_NOT_FOUND:
-            return( PSA_ERROR_EMPTY_SLOT );
-
-        case PSA_ITS_ERROR_STORAGE_FAILURE:
-            return( PSA_ERROR_STORAGE_FAILURE );
-
-        case PSA_ITS_ERROR_INSUFFICIENT_SPACE:
-            return( PSA_ERROR_INSUFFICIENT_STORAGE );
-
-        case PSA_ITS_ERROR_OFFSET_INVALID:
-        case PSA_ITS_ERROR_INCORRECT_SIZE:
-        case PSA_ITS_ERROR_INVALID_ARGUMENTS:
-            return( PSA_ERROR_INVALID_ARGUMENT );
-
-        case PSA_ITS_ERROR_FLAGS_NOT_SUPPORTED:
-            return( PSA_ERROR_NOT_SUPPORTED );
-
-        case PSA_ITS_ERROR_WRITE_ONCE:
-            return( PSA_ERROR_OCCUPIED_SLOT );
-
-        default:
-            return( PSA_ERROR_UNKNOWN_ERROR );
-    }
-}
-
 psa_status_t mbedtls_psa_inject_entropy( const unsigned char *seed,
                                          size_t seed_size )
 {
     psa_status_t status;
-    psa_its_status_t its_status;
-    struct psa_its_info_t p_info;
+    struct psa_storage_info_t p_info;
     if( global_data.initialized )
         return( PSA_ERROR_NOT_PERMITTED );
 
@@ -4328,15 +4439,13 @@ psa_status_t mbedtls_psa_inject_entropy( const unsigned char *seed,
           ( seed_size > MBEDTLS_ENTROPY_MAX_SEED_SIZE ) )
             return( PSA_ERROR_INVALID_ARGUMENT );
 
-    its_status = psa_its_get_info( PSA_CRYPTO_ITS_RANDOM_SEED_UID, &p_info );
-    status = its_to_psa_error( its_status );
+    status = psa_its_get_info( PSA_CRYPTO_ITS_RANDOM_SEED_UID, &p_info );
 
-    if( PSA_ITS_ERROR_UID_NOT_FOUND == its_status ) /* No seed exists */
+    if( PSA_ERROR_DOES_NOT_EXIST == status ) /* No seed exists */
     {
-        its_status = psa_its_set( PSA_CRYPTO_ITS_RANDOM_SEED_UID, seed_size, seed, 0 );
-        status = its_to_psa_error( its_status );
+        status = psa_its_set( PSA_CRYPTO_ITS_RANDOM_SEED_UID, seed_size, seed, 0 );
     }
-    else if( PSA_ITS_SUCCESS == its_status )
+    else if( PSA_SUCCESS == status )
     {
         /* You should not be here. Seed needs to be injected only once */
         status = PSA_ERROR_NOT_PERMITTED;

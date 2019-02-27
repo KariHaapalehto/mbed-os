@@ -1,9 +1,14 @@
 // ---------------------------------- Includes ---------------------------------
-#include "psa/service.h"
-#include "psa/client.h"
-#include <stdint.h>
-#include <string.h>
 
+
+#include "psa/client.h"
+#include "psa/service.h"
+#if defined(TARGET_TFM)
+#define SPM_PANIC(format, ...) \
+{ \
+    while(1){}; \
+}
+#endif
 
 #define PSA_CRYPTO_SECURE 1
 #include "crypto_spe.h"
@@ -18,6 +23,11 @@
 #define mbedtls_free   free
 #endif
 
+// ---------------------------------- Macros -----------------------------------
+#if !defined(MIN)
+#define MIN( a, b ) ( ( ( a ) < ( b ) ) ? ( a ) : ( b ) )
+#endif
+
 // -------------------------------- Structures ---------------------------------
 typedef struct psa_spm_hash_clone_s {
     int32_t partition_id;
@@ -27,6 +37,12 @@ typedef struct psa_spm_hash_clone_s {
 
 // ---------------------------------- Globals ----------------------------------
 static int psa_spm_init_refence_counter = 0;
+
+/* maximal memory allocation for reading large hash or mac input buffers.
+the data will be read in chunks of size */
+#if !defined (MAX_DATA_CHUNK_SIZE_IN_BYTES)
+#define MAX_DATA_CHUNK_SIZE_IN_BYTES 400
+#endif
 
 #ifndef MAX_CONCURRENT_HASH_CLONES
 #define MAX_CONCURRENT_HASH_CLONES 2
@@ -216,24 +232,40 @@ static void psa_mac_operation(void)
                 }
 
                 case PSA_MAC_UPDATE: {
-                    uint8_t *input_ptr = mbedtls_calloc(1, msg.in_size[1]);
-                    if (input_ptr == NULL) {
+
+                    uint8_t *input_buffer = NULL;
+                    size_t data_remaining = msg.in_size[1];
+                    size_t allocation_size = MIN(data_remaining, MAX_DATA_CHUNK_SIZE_IN_BYTES);
+                    size_t size_to_read = 0;
+
+                    input_buffer = mbedtls_calloc(1, allocation_size);
+                    if (input_buffer == NULL) {
                         status = PSA_ERROR_INSUFFICIENT_MEMORY;
                         break;
                     }
 
-                    bytes_read = psa_read(msg.handle, 1, input_ptr,
-                                          msg.in_size[1]);
+                    while (data_remaining > 0) {
+                        size_to_read = MIN(data_remaining, MAX_DATA_CHUNK_SIZE_IN_BYTES);
+                        bytes_read = psa_read(msg.handle, 1, input_buffer,
+                                              size_to_read);
 
-                    if (bytes_read != msg.in_size[1]) {
-                        SPM_PANIC("SPM read length mismatch");
+                        if (bytes_read != size_to_read) {
+                            SPM_PANIC("SPM read length mismatch");
+                        }
+
+                        status = psa_mac_update(msg.rhandle,
+                                                input_buffer,
+                                                bytes_read);
+
+                        // stop on error
+                        if (status != PSA_SUCCESS) {
+                            break;
+                        }
+                        data_remaining = data_remaining - bytes_read;
                     }
 
-                    status = psa_mac_update(msg.rhandle,
-                                            input_ptr,
-                                            msg.in_size[1]);
+                    mbedtls_free(input_buffer);
 
-                    mbedtls_free(input_ptr);
                     break;
                 }
 
@@ -363,23 +395,39 @@ static void psa_hash_operation(void)
                 }
 
                 case PSA_HASH_UPDATE: {
-                    uint8_t *input_ptr = mbedtls_calloc(1, msg.in_size[1]);
-                    if (input_ptr == NULL) {
+                    uint8_t *input_buffer = NULL;
+                    size_t data_remaining = msg.in_size[1];
+                    size_t size_to_read = 0;
+                    size_t allocation_size = MIN(data_remaining, MAX_DATA_CHUNK_SIZE_IN_BYTES);
+
+                    input_buffer = mbedtls_calloc(1, allocation_size);
+                    if (input_buffer == NULL) {
                         status = PSA_ERROR_INSUFFICIENT_MEMORY;
                         break;
                     }
 
-                    bytes_read = psa_read(msg.handle, 1, input_ptr,
-                                          msg.in_size[1]);
+                    while (data_remaining > 0) {
+                        size_to_read = MIN(data_remaining, MAX_DATA_CHUNK_SIZE_IN_BYTES);
+                        bytes_read = psa_read(msg.handle, 1, input_buffer,
+                                              size_to_read);
 
-                    if (bytes_read != msg.in_size[1]) {
-                        SPM_PANIC("SPM read length mismatch");
+                        if (bytes_read != size_to_read) {
+                            SPM_PANIC("SPM read length mismatch");
+                        }
+
+                        status = psa_hash_update(msg.rhandle,
+                                                 input_buffer,
+                                                 bytes_read);
+
+                        // stop on error
+                        if (status != PSA_SUCCESS) {
+                            break;
+                        }
+                        data_remaining = data_remaining - bytes_read;
                     }
 
-                    status = psa_hash_update(msg.rhandle,
-                                             input_ptr,
-                                             msg.in_size[1]);
-                    mbedtls_free(input_ptr);
+                    mbedtls_free(input_buffer);
+
                     break;
                 }
 
@@ -446,7 +494,11 @@ static void psa_hash_operation(void)
                 case PSA_HASH_CLONE_BEGIN: {
                     size_t index = 0;
 
+#if defined(TARGET_MBED_SPM)
                     status = reserve_hash_clone(psa_identity(msg.handle), msg.rhandle, &index);
+#else
+                    status = reserve_hash_clone(msg.client_id, msg.rhandle, &index);
+#endif
                     if (status == PSA_SUCCESS) {
                         psa_write(msg.handle, 0, &index, sizeof(index));
                     }
@@ -462,7 +514,11 @@ static void psa_hash_operation(void)
                         SPM_PANIC("SPM read length mismatch");
                     }
 
+#if defined(TARGET_MBED_SPM)
                     status = get_hash_clone(index, psa_identity(msg.handle), &hash_clone);
+#else
+                    status = get_hash_clone(index, msg.client_id, &hash_clone);
+#endif
                     if (status == PSA_SUCCESS) {
                         status = psa_hash_clone(hash_clone->source_operation, msg.rhandle);
                         release_hash_clone(hash_clone);
@@ -1063,13 +1119,11 @@ static void psa_key_management_operation(void)
                     size_t bits;
                     status = psa_get_key_information(psa_key_mng.handle,
                                                      &type, &bits);
-                    if (status == PSA_SUCCESS) {
-                        if (msg.out_size[0] >= sizeof(psa_key_type_t))
-                            psa_write(msg.handle, 0,
-                                      &type, sizeof(psa_key_type_t));
-                        if (msg.out_size[1] >= sizeof(size_t)) {
-                            psa_write(msg.handle, 1, &bits, sizeof(size_t));
-                        }
+                    if (msg.out_size[0] >= sizeof(psa_key_type_t))
+                        psa_write(msg.handle, 0,
+                                  &type, sizeof(psa_key_type_t));
+                    if (msg.out_size[1] >= sizeof(size_t)) {
+                        psa_write(msg.handle, 1, &bits, sizeof(size_t));
                     }
 
                     break;
@@ -1488,7 +1542,12 @@ void psa_crypto_generator_operations(void)
 void crypto_main(void *ptr)
 {
     while (1) {
-        uint32_t signals = psa_wait_any(PSA_BLOCK);
+        uint32_t signals = 0;
+#if defined(TARGET_MBED_SPM)
+        signals = psa_wait_any(PSA_BLOCK);
+#else
+        signals = psa_wait(CRYPTO_SRV_WAIT_ANY_SID_MSK, PSA_BLOCK);
+#endif
         if (signals & PSA_CRYPTO_INIT) {
             psa_crypto_init_operation();
         }
