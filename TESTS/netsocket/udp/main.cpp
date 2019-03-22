@@ -37,7 +37,7 @@ namespace {
 Timer tc_bucket; // Timer to limit a test cases run time
 }
 
-#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLE
+#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLED
 mbed_stats_socket_t udp_stats[MBED_CONF_NSAPI_SOCKET_STATS_MAX_COUNT];
 #endif
 
@@ -89,7 +89,7 @@ int split2half_rmng_udp_test_time()
     return (udp_global::TESTS_TIMEOUT - tc_bucket.read()) / 2;
 }
 
-#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLE
+#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLED
 int fetch_stats()
 {
     return SocketStats::mbed_stats_socket_get_each(&udp_stats[0], MBED_CONF_NSAPI_SOCKET_STATS_MAX_COUNT);
@@ -110,6 +110,38 @@ void greentea_teardown(const size_t passed, const size_t failed, const failure_t
     tc_bucket.stop();
     _ifdown();
     return greentea_test_teardown_handler(passed, failed, failure);
+}
+
+utest::v1::status_t greentea_case_setup_handler_udp(const Case *const source, const size_t index_of_case)
+{
+#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLED
+    int count = fetch_stats();
+    for (int j = 0; j < count; j++) {
+        TEST_ASSERT_EQUAL(SOCK_CLOSED,  udp_stats[j].state);
+    }
+#endif
+    return greentea_case_setup_handler(source, index_of_case);
+}
+
+utest::v1::status_t greentea_case_teardown_handler_udp(const Case *const source, const size_t passed, const size_t failed, const failure_t failure)
+{
+#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLED
+    int count = fetch_stats();
+    for (int j = 0; j < count; j++) {
+        TEST_ASSERT_EQUAL(SOCK_CLOSED,  udp_stats[j].state);
+    }
+#endif
+    return greentea_case_teardown_handler(source, passed, failed, failure);
+}
+
+static void test_failure_handler(const failure_t failure)
+{
+    UTEST_LOG_FUNCTION();
+    if (failure.location == LOCATION_TEST_SETUP || failure.location == LOCATION_TEST_TEARDOWN) {
+        verbose_test_failure_handler(failure);
+        GREENTEA_TESTSUITE_RESULT(false);
+        while (1) ;
+    }
 }
 
 Case cases[] = {
@@ -135,7 +167,16 @@ Case cases[] = {
     Case("UDPSOCKET_ECHOTEST_BURST", UDPSOCKET_ECHOTEST_BURST),
 };
 
-Specification specification(greentea_setup, cases, greentea_teardown, greentea_continue_handlers);
+handlers_t udp_test_case_handlers = {
+    default_greentea_test_setup_handler,
+    greentea_test_teardown_handler,
+    test_failure_handler,
+    greentea_case_setup_handler_udp,
+    greentea_case_teardown_handler_udp,
+    greentea_case_failure_continue_handler
+};
+
+Specification specification(greentea_setup, cases, greentea_teardown, udp_test_case_handlers);
 
 int main()
 {

@@ -96,6 +96,9 @@
     "LPC54628J512ET180": {
         "OGChipSelectEditMenu": "LPC54618J512\tNXP LPC54618J512"
     },
+    "LPC55S69JBD100": {
+        "OGChipSelectEditMenu": "LPC55S69_core0\tNXP LPC55S69_core0"
+    },
     "STM32F072RB": {
         "OGChipSelectEditMenu": "STM32F072RB\tST STM32F072RB"
     },
@@ -253,10 +256,10 @@
         "OGChipSelectEditMenu": "NCS36510\tONSemiconductor NCS36510"
     },
     "NUC472HI8AE": {
-        "OGChipSelectEditMenu": "NUC400AE series\tNuvoton NUC400AE series (NUC442AE,NUC472AE)"
+        "OGChipSelectEditMenu": "NUC472HI8AE\tNuvoton NUC472HI8AE"
     },
     "M453VG6AE": {
-        "OGChipSelectEditMenu": "M451AE series\tNuvoton M451AE series (M451AE,M452AE,M453AE,M451MAE)"
+        "OGChipSelectEditMenu": "M453VG6AE\tNuvoton M453VG6AE"
     },
     "nRF52840_xxAA":{
         "OGChipSelectEditMenu": "nRF52840_xxAA\tNordicSemi nRF52840_xxAA",

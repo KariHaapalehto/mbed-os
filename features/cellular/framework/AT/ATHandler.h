@@ -20,13 +20,12 @@
 
 #include "platform/mbed_retarget.h"
 
-#include "EventQueue.h"
+#include "events/EventQueue.h"
 #include "PlatformMutex.h"
 #include "nsapi_types.h"
 
 #include "PlatformMutex.h"
 #include "Callback.h"
-#include "EventQueue.h"
 
 namespace mbed {
 
@@ -391,7 +390,8 @@ public:
      *   If needed, it ends the scope of a previous information response.
      *   Sets the information response scope if new prefix is found and response scope if prefix is not found.
      *
-     *  @return true if new information response is found, false otherwise
+     *  @return true if prefix defined for information response is not empty string and is found,
+     *          false otherwise.
      */
     bool info_resp();
 

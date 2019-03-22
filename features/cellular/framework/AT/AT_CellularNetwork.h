@@ -63,8 +63,6 @@ public: // CellularNetwork
 
     virtual void attach(Callback<void(nsapi_event_t, intptr_t)> status_cb);
 
-    virtual nsapi_connection_status_t get_connection_status() const;
-
     virtual nsapi_error_t set_access_technology(RadioAccessTechnology rat);
 
     virtual nsapi_error_t scan_plmn(operList_t &operators, int &ops_count);
@@ -88,13 +86,15 @@ public: // CellularNetwork
 
     virtual nsapi_error_t get_operator_names(operator_names_list &op_names);
 
-    virtual bool is_active_context();
+    virtual bool is_active_context(int *number_of_active_contexts = NULL, int cid = -1);
 
     virtual nsapi_error_t get_registration_params(registration_params_t &reg_params);
 
     virtual nsapi_error_t get_registration_params(RegistrationType type, registration_params_t &reg_params);
 
     virtual nsapi_error_t set_receive_period(int mode, EDRXAccessTechnology act_type, uint8_t edrx_value);
+
+    virtual nsapi_error_t set_packet_domain_event_reporting(bool on);
 
 protected:
 
@@ -106,6 +106,10 @@ protected:
      */
     virtual nsapi_error_t set_access_technology_impl(RadioAccessTechnology op_rat);
 
+    /** Sends a command to query the active state of the PDP contexts.
+     *  Can be overridden by the target class.
+     */
+    virtual void get_context_state_command();
 private:
     //  "NO CARRIER" urc
     void urc_no_carrier();

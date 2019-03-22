@@ -17,7 +17,7 @@
 #include "gtest/gtest.h"
 #include <string.h>
 #include "AT_CellularNetwork.h"
-#include "EventQueue.h"
+#include "events/EventQueue.h"
 #include "ATHandler.h"
 #include "AT_CellularStack.h"
 #include "FileHandle_stub.h"
@@ -1085,7 +1085,7 @@ TEST_F(TestATHandler, test_ATHandler_info_resp)
     filehandle_stub_table = NULL;
 
     ATHandler at(&fh1, que, 0, ",");
-    EXPECT_TRUE(at.info_resp());
+    EXPECT_TRUE(!at.info_resp());
 
     at.resp_start();
     EXPECT_TRUE(!at.info_resp());

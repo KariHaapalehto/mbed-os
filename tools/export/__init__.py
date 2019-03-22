@@ -24,6 +24,7 @@ from os import makedirs, walk
 import copy
 from shutil import rmtree, copyfile
 import zipfile
+from past.builtins import basestring
 
 from ..resources import Resources, FileType, FileRef
 from ..config import ALLOWED_FEATURES
@@ -275,6 +276,9 @@ def export_project(src_paths, export_path, target, ide, libraries_paths=None,
     # Change linker script if specified
     if linker_script is not None:
         resources.linker_script = linker_script
+
+    if toolchain.config.name:
+        name = toolchain.config.name
 
     files, exporter = generate_project_files(resources, export_path,
                                              target, name, toolchain, ide,

@@ -25,9 +25,10 @@ namespace cordio {
 
 void CordioAttClient::att_client_handler(const attEvt_t* event)
 {
+#if BLE_FEATURE_GATT_CLIENT
     if (event->hdr.status == ATT_SUCCESS && event->hdr.event == ATT_MTU_UPDATE_IND) {
         ble::vendor::cordio::BLE& ble = ble::vendor::cordio::BLE::deviceInstance();
-        ble::pal::GattClient::EventHandler *handler = ble.getPalGattClient().get_event_handler();
+        impl::PalGattClientImpl::EventHandler *handler = ble.getPalGattClient().get_event_handler();
         if (handler) {
             handler->on_att_mtu_change(event->hdr.param, event->mtu);
         }
@@ -64,9 +65,12 @@ void CordioAttClient::att_client_handler(const attEvt_t* event)
             }
         }
     }
+#endif // BLE_FEATURE_GATT_CLIENT
 
+#if BLE_FEATURE_GATT_SERVER
     // pass events not handled to the server side
     ble::vendor::cordio::GattServer::getInstance().att_cb(event);
+#endif // BLE_FEATURE_GATT_SERVER
 }
 
 } // cordio

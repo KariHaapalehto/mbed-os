@@ -55,7 +55,11 @@ static SingletonPtr<PlatformMutex> _mutex;
 #   define PREFIX(x)    _sys##x
 #   define OPEN_MAX     _SYS_OPEN
 #   ifdef __MICROLIB
-#       pragma import(__use_full_stdio)
+#       if __ARMCC_VERSION >= 6010050
+asm(" .global __use_full_stdio\n");
+#       else
+#           pragma import(__use_full_stdio)
+#       endif
 #   endif
 
 #elif defined(__ICCARM__)
@@ -291,7 +295,7 @@ static FileHandle *get_console(int fd)
 }
 
 /* Deal with the fact C library may not _open descriptors 0, 1, 2 - auto bind */
-static FileHandle *get_fhc(int fd)
+FileHandle *mbed::mbed_file_handle(int fd)
 {
     if (fd >= OPEN_MAX) {
         return NULL;
@@ -491,13 +495,13 @@ extern "C" FILEHANDLE PREFIX(_open)(const char *name, int openflags)
     /* Use the posix convention that stdin,out,err are filehandles 0,1,2.
      */
     if (std::strcmp(name, __stdin_name) == 0) {
-        get_fhc(STDIN_FILENO);
+        mbed_file_handle(STDIN_FILENO);
         return STDIN_FILENO;
     } else if (std::strcmp(name, __stdout_name) == 0) {
-        get_fhc(STDOUT_FILENO);
+        mbed_file_handle(STDOUT_FILENO);
         return STDOUT_FILENO;
     } else if (std::strcmp(name, __stderr_name) == 0) {
-        get_fhc(STDERR_FILENO);
+        mbed_file_handle(STDERR_FILENO);
         return STDERR_FILENO;
     }
 #endif
@@ -556,7 +560,7 @@ extern "C" int PREFIX(_close)(FILEHANDLE fh)
 
 extern "C" int close(int fildes)
 {
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     filehandles[fildes] = NULL;
     if (fhc == NULL) {
         errno = EBADF;
@@ -668,7 +672,7 @@ finish:
 extern "C" ssize_t write(int fildes, const void *buf, size_t length)
 {
 
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     if (fhc == NULL) {
         errno = EBADF;
         return -1;
@@ -762,8 +766,7 @@ extern "C" int PREFIX(_read)(FILEHANDLE fh, unsigned char *buffer, unsigned int 
 
 extern "C" ssize_t read(int fildes, void *buf, size_t length)
 {
-
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     if (fhc == NULL) {
         errno = EBADF;
         return -1;
@@ -790,7 +793,7 @@ extern "C" int _isatty(FILEHANDLE fh)
 
 extern "C" int isatty(int fildes)
 {
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     if (fhc == NULL) {
         errno = EBADF;
         return 0;
@@ -829,7 +832,7 @@ int _lseek(FILEHANDLE fh, int offset, int whence)
 
 extern "C" off_t lseek(int fildes, off_t offset, int whence)
 {
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     if (fhc == NULL) {
         errno = EBADF;
         return -1;
@@ -845,7 +848,7 @@ extern "C" off_t lseek(int fildes, off_t offset, int whence)
 
 extern "C" int ftruncate(int fildes, off_t length)
 {
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     if (fhc == NULL) {
         errno = EBADF;
         return -1;
@@ -869,7 +872,7 @@ extern "C" int PREFIX(_ensure)(FILEHANDLE fh)
 
 extern "C" int fsync(int fildes)
 {
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     if (fhc == NULL) {
         errno = EBADF;
         return -1;
@@ -887,7 +890,7 @@ extern "C" int fsync(int fildes)
 #ifdef __ARMCC_VERSION
 extern "C" long PREFIX(_flen)(FILEHANDLE fh)
 {
-    FileHandle *fhc = get_fhc(fh);
+    FileHandle *fhc = mbed_file_handle(fh);
     if (fhc == NULL) {
         errno = EBADF;
         return -1;
@@ -908,12 +911,13 @@ extern "C" long PREFIX(_flen)(FILEHANDLE fh)
 // Do not compile this code for TFM secure target
 #if !defined(COMPONENT_SPE) || !defined(TARGET_TFM)
 
+#if !defined(__MICROLIB)
 #if defined (__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050)
 __asm(".global __use_two_region_memory\n\t");
 __asm(".global __use_no_semihosting\n\t");
-
 #else
 #pragma import(__use_two_region_memory)
+#endif
 #endif
 
 #if !defined(HEAP_START)
@@ -939,12 +943,14 @@ extern "C" MBED_WEAK __value_in_regs struct __initial_stackheap _mbed_user_setup
     return r;
 }
 
+#if !defined(__MICROLIB)
 extern "C" __value_in_regs struct __argc_argv $Super$$__rt_lib_init(unsigned heapbase, unsigned heaptop);
 
 extern "C" __value_in_regs struct __argc_argv $Sub$$__rt_lib_init(unsigned heapbase, unsigned heaptop)
 {
     return $Super$$__rt_lib_init((unsigned)HEAP_START, (unsigned)HEAP_LIMIT);
 }
+#endif
 
 extern "C" __value_in_regs struct __initial_stackheap __user_setup_stackheap(uint32_t R0, uint32_t R1, uint32_t R2, uint32_t R3)
 {
@@ -965,7 +971,7 @@ extern "C" int _fstat(int fh, struct stat *st)
 
 extern "C" int fstat(int fildes, struct stat *st)
 {
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     if (fhc == NULL) {
         errno = EBADF;
         return -1;
@@ -978,7 +984,7 @@ extern "C" int fstat(int fildes, struct stat *st)
 
 extern "C" int fcntl(int fildes, int cmd, ...)
 {
-    FileHandle *fhc = get_fhc(fildes);
+    FileHandle *fhc = mbed_file_handle(fildes);
     if (fhc == NULL) {
         errno = EBADF;
         return -1;
@@ -1023,7 +1029,7 @@ extern "C" int poll(struct pollfd fds[], nfds_t nfds, int timeout)
     for (nfds_t n = 0; n < nfds; n++) {
         // Underlying FileHandle poll returns POLLNVAL if given NULL, so
         // we don't need to take special action.
-        fhs[n].fh = get_fhc(fds[n].fd);
+        fhs[n].fh = mbed_file_handle(fds[n].fd);
         fhs[n].events = fds[n].events;
     }
     int ret = poll(fhs, nfds, timeout);
@@ -1251,7 +1257,7 @@ extern "C" WEAK caddr_t _sbrk(int incr)
     /* __HeapLimit is end of heap section */
     if (new_heap > (uint32_t) &__HeapLimit) {
         errno = ENOMEM;
-        return (caddr_t) -1;
+        return (caddr_t) - 1;
     }
 
     heap = new_heap;

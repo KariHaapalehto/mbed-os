@@ -44,7 +44,7 @@ extern "C" {
 #define INT32_MIN   (-0x7fffffff - 1)
 #endif
 
-#define PSA_FRAMEWORK_VERSION    (0x0009) /**< Version of the PSA Framework API. */
+#define PSA_FRAMEWORK_VERSION    (0x0100) /**< Version of the PSA Framework API. */
 #define PSA_VERSION_NONE         (0L)     /**< Identifier for an unimplemented Root of Trust (RoT) Service. */
 
 #define PSA_NSPE_IDENTIFIER (-1L)  /**< "Partition" identifier of the NSPE.*/
@@ -55,6 +55,7 @@ extern "C" {
 
 #define PSA_POLL  (0x00000000UL) /**< Returns immediately even if none of the requested signals is asserted.*/
 #define PSA_BLOCK (0x80000000UL) /**< Block the caller until one of the requested signals is asserted.*/
+#define PSA_WAIT_ANY (0xFFFFFFFFUL) /**< A mask value that includes all Secure Partition signals.*/
 
 #define PSA_MINOR_VERSION_POLICY_RELAXED (0UL) /**< Don't perform minor version check during psa_connect().*/
 #define PSA_MINOR_VERSION_POLICY_STRICT (1UL)  /**< Force minor version check during psa_connect().*/
@@ -76,7 +77,6 @@ extern "C" {
 
 typedef uint32_t psa_signal_t;
 typedef int32_t psa_handle_t;
-typedef psa_status_t error_t;
 
 /* -------------------------------------- Structs ------------------------------------ */
 
@@ -86,6 +86,7 @@ typedef psa_status_t error_t;
 typedef struct psa_msg {
     uint32_t type;                   /**< The message type.*/
     psa_handle_t handle;             /**< Handle for the internal message structure.*/
+    int32_t client_id;               /**< Message origin.*/
     void *rhandle;                   /**< Reverse handle.*/
     size_t in_size[PSA_MAX_IOVEC];   /**< Array of sizes in bytes of the message payloads.*/
     size_t out_size[PSA_MAX_IOVEC];  /**< Array of sizes in bytes of the response buffers.*/
@@ -110,7 +111,6 @@ typedef struct psa_outvec {
 #ifdef __cplusplus
 }
 #endif
-
 
 /** @}*/ // end of SPM group
 

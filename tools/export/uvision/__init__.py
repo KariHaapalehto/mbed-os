@@ -26,7 +26,6 @@ class DeviceUvision(DeviceCMSIS):
         self.svd = ''
         if self.debug_svd:
             self.svd = dev_format.format(self.dname, self.debug_svd)
-        self.reg_file = dev_format.format(self.dname, self.compile_header)
         self.debug_interface = self.uv_debug()
         self.flash_dll = self.generate_flash_dll()
 
@@ -73,14 +72,10 @@ class DeviceUvision(DeviceCMSIS):
         '''
         fl_count = 0
 
-        def get_mem_no_x(mem_str):
-            mem_reg = "\dx(\w+)"
-            m = re.search(mem_reg, mem_str)
-            return m.group(1) if m else None
-
         RAMS = [
-            (get_mem_no_x(info["start"]), get_mem_no_x(info["size"]))
-            for mem, info in self.target_info["memory"].items() if "RAM" in mem
+            (info["start"], info["size"])
+            for mem, info in self.target_info["memories"].items()
+            if "RAM" in mem
         ]
         format_str = (
             "UL2CM3(-S0 -C0 -P0 -FD{ramstart}"
@@ -90,26 +85,27 @@ class DeviceUvision(DeviceCMSIS):
         # Default according to Keil developer
         ramsize = '1000'
         if len(RAMS) >= 1:
-            ramstart = RAMS[0][0]
+            ramstart = '{:x}'.format(RAMS[0][0])
         extra_flags = []
-        for name, info in self.target_info["algorithm"].items():
-            if not name or not info:
+        for info in self.target_info["algorithms"]:
+            if not info:
                 continue
-            if int(info["default"]) == 0:
+            if not info["default"]:
                 continue
+            name = info['file_name']
             name_reg = "\w*/([\w_]+)\.flm"
             m = re.search(name_reg, name.lower())
             fl_name = m.group(1) if m else None
             name_flag = "-FF" + str(fl_count) + fl_name
 
-            start = get_mem_no_x(info["start"])
-            size = get_mem_no_x(info["size"])
+            start = '{:x}'.format(info["start"])
+            size = '{:x}'.format(info["size"])
             rom_start_flag = "-FS" + str(fl_count) + str(start)
             rom_size_flag = "-FL" + str(fl_count) + str(size)
 
-            if info["ramstart"] is not None and info["ramsize"] is not None:
-                ramstart = get_mem_no_x(info["ramstart"])
-                ramsize = get_mem_no_x(info["ramsize"])
+            if info["ram_start"] is not None and info["ram_size"] is not None:
+                ramstart = '{:x}'.format(info["ram_start"])
+                ramsize = '{:x}'.format(info["ram_size"])
 
             path_flag = "-FP{}($$Device:{}${})".format(
                 str(fl_count), self.dname, name
@@ -141,7 +137,8 @@ class Uvision(Exporter):
         "LPC4088Code.binary_hook",
         "MTSCode.combine_bins_mts_dot",
         "MTSCode.combine_bins_mts_dragonfly",
-        "NCS36510TargetCode.ncs36510_addfib"
+        "NCS36510TargetCode.ncs36510_addfib",
+        "LPC55S69Code.binary_hook"
     ])
 
     # File associations within .uvprojx file
@@ -241,7 +238,7 @@ class Uvision(Exporter):
             'project_files': sorted(list(self.format_src(srcs).items()),
                                     key=lambda tuple: tuple[0].lower()),
             'include_paths': ';'.join(self.filter_dot(d) for d in
-                                      self.resources.inc_dirs).encode('utf-8'),
+                                      self.resources.inc_dirs),
             'device': DeviceUvision(self.target),
         }
         sct_name, sct_path = self.resources.get_file_refs(
@@ -315,9 +312,15 @@ class UvisionArmc5(Uvision):
     @classmethod
     def is_target_supported(cls, target_name):
         target = TARGET_MAP[target_name]
-        if not (set(target.supported_toolchains).intersection(
-                set(["ARM", "uARM"]))):
-            return False
+        if int(target.build_tools_metadata["version"]) > 0:
+            #Just check for ARMC5 as ARMC5 must be there irrespective of whether uARM is there or not if the target is staying with ARMC5
+            if "ARMC5" not in target.supported_toolchains:
+                return False
+        else:
+            if not (set(target.supported_toolchains).intersection(
+                    set(["ARM", "uARM"]))):
+                return False
+
         if not DeviceCMSIS.check_supported(target_name):
             return False
         if "Cortex-A" in target.core:
@@ -338,9 +341,14 @@ class UvisionArmc6(Uvision):
     @classmethod
     def is_target_supported(cls, target_name):
         target = TARGET_MAP[target_name]
-        if not (set(target.supported_toolchains).intersection(
-                set(["ARMC6"]))):
-            return False
+        if int(target.build_tools_metadata["version"]) > 0:
+            if not len(set(target.supported_toolchains).intersection(
+                    set(["ARM", "ARMC6"]))) > 0:
+                return False
+        else:
+            if "ARMC6" not in target.supported_toolchains:
+                return False
+
         if not DeviceCMSIS.check_supported(target_name):
             return False
         if "Cortex-A" in target.core:

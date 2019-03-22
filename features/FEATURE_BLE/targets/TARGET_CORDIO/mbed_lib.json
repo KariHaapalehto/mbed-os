@@ -1,5 +1,6 @@
 {
     "name": "cordio",
+    "macros": [ "WSF_MS_PER_TICK=1" ],
     "config": {
         "max-connections": {
             "help": "Maximum number of connections",
@@ -53,6 +54,11 @@
         "max-prepared-writes": {
             "help": "Number of queued prepare writes supported by server.",
             "value": 4
+        },
+        "cmac-calculation": {
+            "help": "Where the CBC MAC calculatio is performed. Valid values are 0 (host) and 1 (controller through HCI).",
+            "value": 1,
+            "macro_name": "SEC_CCM_CFG"
         }
     }
 }

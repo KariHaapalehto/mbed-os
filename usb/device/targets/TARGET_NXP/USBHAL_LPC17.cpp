@@ -126,10 +126,10 @@ static USBPhyHw *instance;
 static uint32_t opStarted;
 
 static const usb_ep_t ISO_EPS[] = {
-        0x03, 0x83,
-        0x06, 0x86,
-        0x09, 0x89,
-        0x0C, 0x8C
+    0x03, 0x83,
+    0x06, 0x86,
+    0x09, 0x89,
+    0x0C, 0x8C
 };
 
 static void SIECommand(uint32_t command)
@@ -171,7 +171,7 @@ static uint8_t SIEgetDeviceStatus(void)
     return SIEReadData(SIE_CMD_GET_DEVICE_STATUS);
 }
 
-void SIEsetAddress(uint8_t address, bool enable=true)
+void SIEsetAddress(uint8_t address, bool enable = true)
 {
     // Write SIE device address register
     SIECommand(SIE_CMD_SET_ADDRESS);
@@ -369,7 +369,7 @@ USBPhy *get_usb_phy()
     return &usbphy;
 }
 
-USBPhyHw::USBPhyHw(void)
+USBPhyHw::USBPhyHw(void): events(NULL)
 {
 
 }
@@ -381,6 +381,9 @@ USBPhyHw::~USBPhyHw(void)
 
 void USBPhyHw::init(USBPhyEvents *events)
 {
+    if (this->events == NULL) {
+        sleep_manager_lock_deep_sleep();
+    }
     this->events = events;
 
     // Disable IRQ
@@ -440,6 +443,11 @@ void USBPhyHw::deinit()
     NVIC_DisableIRQ(USB_IRQn);
     events = NULL;
     opStarted = 0;
+
+    if (events != NULL) {
+        sleep_manager_unlock_deep_sleep();
+    }
+    events = NULL;
 }
 
 bool USBPhyHw::powered()
