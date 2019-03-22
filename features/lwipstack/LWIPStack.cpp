@@ -688,6 +688,11 @@ LWIP &LWIP::get_instance()
     return lwip;
 }
 
+OnboardNetworkStack &OnboardNetworkStack::get_default_lwip_instance()
+{
+    return LWIP::get_instance();
+}
+
 // This works as long as it's not ever set to something which corresponds to
 // a macro defined as a non-integer. Eg `#define Nanostack "Foo"`
 #define LWIP 0x11991199

@@ -996,6 +996,11 @@ Nanostack &Nanostack::get_instance()
     return nanostack;
 }
 
+OnboardNetworkStack &OnboardNetworkStack::get_default_ns_instance()
+{
+    return Nanostack::get_instance();
+}
+
 // This works as long as it's not ever set to something which corresponds to
 // a macro defined as a non-integer. Eg `#define Nanostack "Foo"`
 #define NANOSTACK 0x99119911

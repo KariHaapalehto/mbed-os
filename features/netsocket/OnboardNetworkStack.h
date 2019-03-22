@@ -39,6 +39,8 @@ public:
      * JSON option nsapi.default-stack.
      */
     static OnboardNetworkStack &get_default_instance();
+    static OnboardNetworkStack &get_default_lwip_instance();
+    static OnboardNetworkStack &get_default_ns_instance();
 
     /** Representation of a stack's view of an interface.
      *

@@ -20,10 +20,16 @@
 #include "WiFiInterface.h"
 #include "CellularBase.h"
 #include "MeshInterface.h"
+#include "VpnInterface.h"
 
 /* Weak default instance static classes for the various abstract classes.
  * Applications can override these.
  */
+
+MBED_WEAK VpnInterface *VpnInterface::get_default_instance()
+{
+    return get_target_default_instance();
+}
 
 MBED_WEAK EthInterface *EthInterface::get_default_instance()
 {
@@ -117,6 +123,7 @@ void CellularBase::set_default_parameters()
 #define WIFI 2
 #define MESH 3
 #define CELLULAR 4
+#define VPN 5
 #if MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE == ETHERNET
 MBED_WEAK NetworkInterface *NetworkInterface::get_target_default_instance()
 {
@@ -144,6 +151,11 @@ MBED_WEAK NetworkInterface *NetworkInterface::get_target_default_instance()
 MBED_WEAK NetworkInterface *NetworkInterface::get_target_default_instance()
 {
     return MeshInterface::get_default_instance();
+}
+#elif MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE == VPN
+MBED_WEAK NetworkInterface *NetworkInterface::get_target_default_instance()
+{
+    return VpnInterface::get_default_instance();
 }
 #elif MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE == CELLULAR
 MBED_WEAK NetworkInterface *NetworkInterface::get_target_default_instance()

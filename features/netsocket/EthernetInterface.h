@@ -39,7 +39,7 @@ public:
      * @param stack Reference to onboard-network stack to use.
      */
     EthernetInterface(EMAC &emac = EMAC::get_default_instance(),
-                      OnboardNetworkStack &stack = OnboardNetworkStack::get_default_instance()) : EMACInterface(emac, stack) { }
+                      OnboardNetworkStack &stack = OnboardNetworkStack::get_default_ns_instance()) : EMACInterface(emac, stack) { }
 };
 
 #endif
